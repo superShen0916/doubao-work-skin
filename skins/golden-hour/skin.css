@@ -1,0 +1,276 @@
+/* 黄金时刻：JoJo 风格的紫袍英雄与替身，暖象牙与深紫金的戏剧性时尚插画。 */
+
+[data-testid="chat-route-layout"] {
+  position: relative !important;
+  isolation: isolate !important;
+  color: var(--dws-text) !important;
+  background: var(--dws-bg) !important;
+}
+
+[data-testid="chat-route-layout"] > * {
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+#chat-route-main,
+#chat-route-main > main {
+  background-color: transparent !important;
+}
+
+#chat-route-main > main {
+  background-image: none !important;
+}
+
+/* 非聊天页全屏浅蒙版 */
+#chat-route-main > main:not(:has([data-testid="message-list"])):not(:has([data-testid="flow_chat_guidance_page"])) {
+  background: rgba(240, 232, 224, .74) !important;
+  backdrop-filter: blur(3px) saturate(112%) !important;
+  -webkit-backdrop-filter: blur(3px) saturate(112%) !important;
+}
+
+/* 左侧导航 */
+[data-testid="chat_route_layout_leftside_nav"] {
+  position: relative !important;
+  background:
+    radial-gradient(circle at 14% 18%, rgba(122, 88, 160, .10), transparent 30%),
+    radial-gradient(circle at 88% 70%, rgba(200, 160, 64, .08), transparent 34%),
+    linear-gradient(155deg, rgba(240, 232, 224, .82), rgba(244, 236, 228, .74)) !important;
+  border-right: 1px solid rgba(130, 100, 100, 0.20) !important;
+  box-shadow: 10px 0 28px rgba(0, 0, 0, .08), inset -1px 0 rgba(255, 255, 255, .55) !important;
+  backdrop-filter: blur(7px) saturate(116%) !important;
+  -webkit-backdrop-filter: blur(7px) saturate(116%) !important;
+}
+
+[data-testid="chat_route_layout_leftside_nav"]::after {
+  content: "" !important;
+  position: absolute !important;
+  top: 0 !important; right: 0 !important; bottom: 0 !important;
+  width: 2px !important;
+  pointer-events: none !important;
+  background: linear-gradient(180deg, rgba(122, 88, 160, .72), rgba(200, 160, 64, .42) 48%, rgba(200, 160, 64, .70)) !important;
+  box-shadow: 0 0 16px rgba(122, 88, 160, .38) !important;
+}
+
+[data-testid="flow_chat_sidebar"],
+[data-testid="chat_list_wrapper"],
+[data-testid="conversation-section"] {
+  color: #3e3030 !important;
+  background: transparent !important;
+}
+
+[data-testid="conversation-list-v2-item"] {
+  border: 0 !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+  transition: background .16s ease, box-shadow .16s ease !important;
+}
+
+[data-testid="conversation-list-v2-item"]:hover {
+  background: linear-gradient(90deg, rgba(122, 88, 160, .14), rgba(200, 160, 64, .08)) !important;
+}
+
+[data-testid="conversation-list-v2-item"][aria-current="page"],
+[data-testid="conversation-list-v2-item"][data-state="active"] {
+  background: linear-gradient(90deg, rgba(122, 88, 160, .22), rgba(200, 160, 64, .10)) !important;
+  box-shadow: inset 3px 0 0 #7a58a0 !important;
+}
+
+/* 标题栏 */
+#chat-route-main > main div[class*="h-header-height"] {
+  color: #3e3030 !important;
+  background: linear-gradient(90deg, rgba(240, 232, 224, .48), rgba(244, 236, 228, .30)) !important;
+  border-bottom: 1px solid rgba(122, 88, 160, .22) !important;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, .06), inset 0 -1px rgba(255, 255, 255, .55) !important;
+  backdrop-filter: blur(14px) saturate(122%) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(122%) !important;
+}
+
+[data-testid="conversation_header_tip_text"] { display: none !important; }
+
+[data-testid="message-list"],
+[data-testid="message-block-container"],
+[data-testid="union_message"],
+[data-testid="send_message"] {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+/* AI 消息局部纸面 */
+[data-testid="receive_message"] {
+  position: relative !important;
+  box-sizing: border-box !important;
+  color: #3e3030 !important;
+  background: linear-gradient(90deg, rgba(250, 244, 238, .82) 0%, rgba(250, 244, 238, .70) 78%, rgba(250, 244, 238, 0) 100%) !important;
+  border: 0 !important;
+  border-radius: 16px 0 0 16px !important;
+  padding: 18px 42px 18px 26px !important;
+  box-shadow: none !important;
+}
+
+[data-testid="receive_message"] [data-testid="message_text_content"],
+[data-testid="receive_message"] [data-testid="message_text_content"] * {
+  color: #3e3030 !important;
+  text-shadow: none !important;
+}
+
+/* 用户消息 */
+[data-testid="send_message"] .content-KTJ1Rj {
+  color: #fff !important;
+  background: linear-gradient(145deg, rgba(122, 88, 160, .94), rgba(200, 160, 64, .90)) !important;
+  border: 1px solid rgba(122, 88, 160, .32) !important;
+  border-radius: 16px 16px 5px 16px !important;
+  box-shadow: 0 12px 29px rgba(122, 88, 160, .22), inset 0 1px rgba(255, 255, 255, .25) !important;
+}
+
+[data-testid="send_message"] [data-testid="message_text_content"],
+[data-testid="send_message"] [data-testid="message_text_content"] * {
+  color: #fff !important;
+}
+
+[data-testid="message-list"] .scroller { background: transparent !important; }
+
+/* 输入框 */
+[data-testid="chat_input"] {
+  position: relative !important;
+  color: #3e3030 !important;
+  background: linear-gradient(165deg, rgba(250, 244, 238, .95), rgba(244, 236, 228, .88)) !important;
+  border: 1px solid rgba(122, 88, 160, .58) !important;
+  border-radius: 18px !important;
+  box-shadow:
+    0 0 0 1px rgba(200, 160, 64, .16),
+    0 14px 38px rgba(0, 0, 0, .14),
+    inset 0 1px rgba(255, 255, 255, .88),
+    inset 0 -1px rgba(122, 88, 160, .14) !important;
+  backdrop-filter: blur(20px) saturate(126%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(126%) !important;
+}
+
+[data-testid="chat_input"],
+[data-testid="chat_input"] * {
+  color: #3e3030 !important;
+}
+
+[data-testid="chat_input"] input,
+[data-testid="chat_input"] textarea,
+[data-testid="chat_input"] [contenteditable="true"] {
+  color: #3e3030 !important;
+  caret-color: #7a58a0 !important;
+}
+
+[data-testid="chat_input"] svg { color: #6e5e58 !important; }
+
+[data-testid="chat_input"] > .guidance-input-surface {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+[data-testid="chat_input"]:focus-within {
+  border-color: rgba(122, 88, 160, .82) !important;
+  box-shadow:
+    0 0 0 2px rgba(122, 88, 160, .18),
+    0 0 22px rgba(122, 88, 160, .26),
+    0 0 34px rgba(200, 160, 64, .12),
+    0 16px 42px rgba(0, 0, 0, .16) !important;
+}
+
+div[class*="flex-col-reverse"][class*="input-guidance"] > *:not([data-testid="chat_input"]),
+#chat-route-main :has(> [data-testid="queue-message-list"]) {
+  color: #3e3030 !important;
+  background: rgba(250, 244, 238, .95) !important;
+  border: 1px solid rgba(122, 88, 160, .18) !important;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .10) !important;
+  backdrop-filter: blur(18px) !important;
+  -webkit-backdrop-filter: blur(18px) !important;
+}
+
+#chat-route-main [data-testid="chat_input"] ~ :has([data-testid="queue-message-list"]) {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+[data-testid="message_action_bar"] button:hover {
+  color: #7a58a0 !important;
+  background: rgba(122, 88, 160, .10) !important;
+}
+
+/* 代码和表格 */
+[data-testid="message_text_content"] pre,
+[data-testid="message_text_content"] table {
+  background: rgba(250, 244, 238, .95) !important;
+  border: 1px solid rgba(122, 88, 160, .17) !important;
+  box-shadow: 0 9px 24px rgba(0, 0, 0, .08), inset 0 1px rgba(255, 255, 255, .76) !important;
+}
+
+[data-testid="message_text_content"] thead {
+  background: rgba(122, 88, 160, .10) !important;
+}
+
+[data-testid="message_text_content"] :not(pre) > code {
+  color: #7a58a0 !important;
+  background: rgba(122, 88, 160, .10) !important;
+  border: 1px solid rgba(122, 88, 160, .16) !important;
+}
+
+[data-testid="message_text_content"] blockquote {
+  color: #6e5e58 !important;
+  border-left-color: rgba(200, 160, 64, .76) !important;
+  background: linear-gradient(90deg, rgba(200, 160, 64, .10), transparent) !important;
+}
+
+/* 弹窗菜单 */
+[role="menu"],
+[role="dialog"],
+[data-radix-popper-content-wrapper] > * {
+  color: #3e3030 !important;
+  background: rgba(250, 244, 238, .97) !important;
+  border: 1px solid rgba(122, 88, 160, .20) !important;
+  box-shadow: 0 26px 64px rgba(0, 0, 0, .18), inset 0 1px rgba(255, 255, 255, .78) !important;
+  backdrop-filter: blur(23px) saturate(108%) !important;
+  -webkit-backdrop-filter: blur(23px) saturate(108%) !important;
+}
+
+[role="menu"] [data-highlighted],
+[role="menu"] [data-state="checked"],
+[role="menu"] [role="menuitem"]:hover,
+[role="menu"] [role="menuitemcheckbox"]:hover,
+[role="dialog"] button:hover {
+  background: rgba(122, 88, 160, .10) !important;
+}
+
+/* 右侧工作台 */
+[data-testid="right-panel-container"],
+[data-testid="samantha_layout_right_side"] {
+  color: #3e3030 !important;
+  background: linear-gradient(180deg, rgba(240, 232, 224, .34), rgba(244, 236, 228, .24)) !important;
+  border-left: 1px solid rgba(122, 88, 160, .24) !important;
+  box-shadow: -12px 0 32px rgba(0, 0, 0, .08), inset 1px 0 rgba(255, 255, 255, .38) !important;
+  backdrop-filter: blur(8px) saturate(124%) !important;
+  -webkit-backdrop-filter: blur(8px) saturate(124%) !important;
+}
+
+/* 首页推荐 */
+[data-testid="flow_chat_guidance_page"] [class*="text-dbx-text-h"] {
+  color: #7a58a0 !important;
+}
+
+[data-testid="flow_chat_guidance_page"] [class*="line-clamp"],
+[data-testid="flow_chat_guidance_page"] [class*="recommend"] {
+  color: #3e3030 !important;
+  background: linear-gradient(90deg, rgba(250, 244, 238, .76), rgba(250, 244, 238, .54)) !important;
+  border-radius: 10px !important;
+  padding: 6px 10px !important;
+}
+
+::selection {
+  color: #ffe8d8 !important;
+  background: rgba(122, 88, 160, .46) !important;
+}
+
+::-webkit-scrollbar-track { background: rgba(122, 88, 160, .05) !important; }
+::-webkit-scrollbar-thumb { background: rgba(122, 88, 160, .29) !important; }
+::-webkit-scrollbar-thumb:hover { background: rgba(200, 160, 64, .43) !important; }

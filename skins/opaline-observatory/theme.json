@@ -1,0 +1,27 @@
+{
+  "id": "opaline-observatory",
+  "name": "虹光观测站",
+  "version": "1.0.0",
+  "description": "乳白玻璃与冰川青的未来观测站，淡紫与香槟金干涉色的建筑级科幻。",
+  "appearance": "light",
+  "background": {
+    "image": "background.png",
+    "focusX": 0.5,
+    "focusY": 0.5
+  },
+  "colors": {
+    "bg-primary": "#e7ebf2",
+    "bg-secondary": "#edeff6",
+    "bg-tertiary": "#f6f4fa",
+    "text-primary": "#2e3440",
+    "text-secondary": "#5e6470",
+    "text-tertiary": "#8e94a0",
+    "accent": "#6ab0d0",
+    "accent-alt": "#a890d0",
+    "border": "rgba(100, 130, 160, 0.20)",
+    "sidebar-bg": "rgba(234, 238, 244, 0.84)",
+    "card-bg": "rgba(248, 248, 252, 0.89)",
+    "input-bg": "rgba(248, 248, 252, 0.95)",
+    "selection-color": "#e8f4ff"
+  }
+}

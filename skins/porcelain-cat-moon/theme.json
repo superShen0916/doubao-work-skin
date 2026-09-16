@@ -1,0 +1,27 @@
+{
+  "id": "porcelain-cat-moon",
+  "name": "月白庭院",
+  "version": "1.0.0",
+  "description": "杏色陶瓷拱门中的象牙白瓷猫，青瓷盆景与暖陶土色调的超现实月庭。",
+  "appearance": "light",
+  "background": {
+    "image": "background.png",
+    "focusX": 0.5,
+    "focusY": 0.5
+  },
+  "colors": {
+    "bg-primary": "#f2ede4",
+    "bg-secondary": "#f5f1ea",
+    "bg-tertiary": "#faf7f2",
+    "text-primary": "#3a3228",
+    "text-secondary": "#6a5e50",
+    "text-tertiary": "#9a8e80",
+    "accent": "#a8c4b0",
+    "accent-alt": "#d4956a",
+    "border": "rgba(160, 140, 110, 0.20)",
+    "sidebar-bg": "rgba(242, 238, 232, 0.84)",
+    "card-bg": "rgba(250, 247, 242, 0.89)",
+    "input-bg": "rgba(250, 247, 242, 0.95)",
+    "selection-color": "#fff5e8"
+  }
+}

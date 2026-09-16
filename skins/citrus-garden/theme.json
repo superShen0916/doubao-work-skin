@@ -1,0 +1,27 @@
+{
+  "id": "citrus-garden",
+  "name": "橘园午后",
+  "version": "1.0.0",
+  "description": " Risograph 印刷风的柑橘树与陶土花盆，奶油燕麦与焦橙的复古杂志感。",
+  "appearance": "light",
+  "background": {
+    "image": "background.png",
+    "focusX": 0.5,
+    "focusY": 0.5
+  },
+  "colors": {
+    "bg-primary": "#f2ede0",
+    "bg-secondary": "#f5f0e4",
+    "bg-tertiary": "#faf6ea",
+    "text-primary": "#3e3828",
+    "text-secondary": "#6e6450",
+    "text-tertiary": "#9e9480",
+    "accent": "#8aa068",
+    "accent-alt": "#d48040",
+    "border": "rgba(140, 120, 80, 0.20)",
+    "sidebar-bg": "rgba(242, 237, 224, 0.84)",
+    "card-bg": "rgba(250, 246, 234, 0.89)",
+    "input-bg": "rgba(250, 246, 234, 0.95)",
+    "selection-color": "#fff5d8"
+  }
+}

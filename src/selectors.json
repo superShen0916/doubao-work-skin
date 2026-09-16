@@ -1,0 +1,327 @@
+{
+  "schema": "doubao-work-skin-selectors/2",
+  "description": "豆包工作选择器契约（2.28.12 实测）。仅使用稳定 data-testid、role 和最小稳定类名；禁止纯 nth-child 路径和 hash 类名。",
+  "verifiedAgainst": {
+    "date": "2026-09-16",
+    "doubaoWorkVersions": [
+      "2.28.12"
+    ],
+    "note": "基于页面 CDP 端口 9342 实测 DOM 快照、布局检查和截图回归。2026-09-16 新增对话摘要面板（fixedPanel）选择器实测。"
+  },
+  "appearanceSignal": {
+    "root": "html",
+    "attribute": "data-theme",
+    "dark": "dark",
+    "light": "light",
+    "bodyBackground": "原生主题控制，不写入 body 内联背景"
+  },
+  "scopeVocabulary": {
+    "all": "聊天工作区主路由",
+    "sidebar": "左侧会话与导航",
+    "workspace": "中间正文与输入区",
+    "overlay": "菜单/弹窗/浮层",
+    "right": "右侧工作台/抽屉"
+  },
+  "selectors": [
+    {
+      "key": "app-layout",
+      "selector": "[data-testid=\"chat-route-layout\"]",
+      "tier": "L1",
+      "scope": "all",
+      "required": true,
+      "notes": "聊天页三栏布局根节点。"
+    },
+    {
+      "key": "left-nav-panel",
+      "selector": "[data-testid=\"chat_route_layout_leftside_nav\"]",
+      "tier": "L1",
+      "scope": "sidebar",
+      "required": true,
+      "notes": "左侧导航外层容器。"
+    },
+    {
+      "key": "flow-sidebar",
+      "selector": "[data-testid=\"flow_chat_sidebar\"]",
+      "tier": "L1",
+      "scope": "sidebar",
+      "required": true,
+      "notes": "实际会话栏背景承载节点。"
+    },
+    {
+      "key": "chat-list-wrapper",
+      "selector": "[data-testid=\"chat_list_wrapper\"]",
+      "tier": "L2",
+      "scope": "sidebar",
+      "required": false,
+      "notes": "会话列表滚动区。"
+    },
+    {
+      "key": "conversation-section",
+      "selector": "[data-testid=\"conversation-section\"]",
+      "tier": "L2",
+      "scope": "sidebar",
+      "required": false,
+      "notes": "2026-09-13 在豆包工作 2.28.12 当前侧栏实测命中；用于会话分组区域的文字和图标颜色。"
+    },
+    {
+      "key": "conversation-item",
+      "selector": "[data-testid=\"conversation-list-v2-item\"]",
+      "tier": "L2",
+      "scope": "sidebar",
+      "required": false,
+      "notes": "单个会话项；hover/active 在此节点处理。"
+    },
+    {
+      "key": "main-content",
+      "selector": "#chat-route-main > main",
+      "tier": "L1",
+      "scope": "workspace",
+      "required": true,
+      "notes": "中间工作区主容器，背景承载层和阅读遮罩挂在此节点内。"
+    },
+    {
+      "key": "header-bar",
+      "selector": "#chat-route-main > main div[class*=\"h-header-height\"]",
+      "tier": "L1",
+      "scope": "workspace",
+      "required": true,
+      "notes": "顶部标题栏；稳定类前缀 h-header-height。"
+    },
+    {
+      "key": "message-list",
+      "selector": "[data-testid=\"message-list\"]",
+      "tier": "L1",
+      "scope": "workspace",
+      "required": true,
+      "notes": "消息虚拟列表；右侧氛围艺术通过该节点背景与遮罩实现。"
+    },
+    {
+      "key": "message-scroller",
+      "selector": "[data-testid=\"message-list\"] .scroller",
+      "tier": "L2",
+      "scope": "workspace",
+      "required": false,
+      "notes": "消息滚动容器，类名 .scroller 在当前版本稳定。"
+    },
+    {
+      "key": "message-block",
+      "selector": "[data-testid=\"message-block-container\"]",
+      "tier": "L2",
+      "scope": "workspace",
+      "required": false,
+      "notes": "单条消息块容器。"
+    },
+    {
+      "key": "union-message",
+      "selector": "[data-testid=\"union_message\"]",
+      "tier": "L2",
+      "scope": "workspace",
+      "required": false,
+      "notes": "2026-09-13 在豆包工作 2.28.12 当前消息页实测命中；联合消息外层保持透明。"
+    },
+    {
+      "key": "message-content",
+      "selector": "[data-testid=\"message_content\"]",
+      "tier": "L2",
+      "scope": "workspace",
+      "required": false,
+      "notes": "2026-09-13 在豆包工作 2.28.12 当前消息页实测命中；承载结构化消息内容的区域颜色。"
+    },
+    {
+      "key": "receive-message",
+      "selector": "[data-testid=\"receive_message\"]",
+      "tier": "L1",
+      "scope": "workspace",
+      "required": true,
+      "notes": "接收消息容器。"
+    },
+    {
+      "key": "send-message",
+      "selector": "[data-testid=\"send_message\"]",
+      "tier": "L1",
+      "scope": "workspace",
+      "required": true,
+      "notes": "发送消息容器；用户气泡需处理 .content-KTJ1Rj。"
+    },
+    {
+      "key": "message-text",
+      "selector": "[data-testid=\"message_text_content\"]",
+      "tier": "L1",
+      "scope": "workspace",
+      "required": true,
+      "notes": "消息正文；markdown 表格、代码块、引用在其子树内精确覆盖。"
+    },
+    {
+      "key": "message-action-bar",
+      "selector": "[data-testid=\"message_action_bar\"]",
+      "tier": "L2",
+      "scope": "workspace",
+      "required": false,
+      "notes": "消息操作按钮条。"
+    },
+    {
+      "key": "guidance-page",
+      "selector": "[data-testid=\"flow_chat_guidance_page\"]",
+      "tier": "L2",
+      "scope": "workspace",
+      "required": false,
+      "notes": "2026-09-13 在豆包工作 2.28.12 引导页 target 实测命中；欢迎页文字和卡片状态在该节点内覆盖。"
+    },
+    {
+      "key": "chat-input",
+      "selector": "[data-testid=\"chat_input\"]",
+      "tier": "L1",
+      "scope": "workspace",
+      "required": true,
+      "notes": "输入器外层；内层白底由 > .guidance-input-surface 处理。"
+    },
+    {
+      "key": "chat-input-surface",
+      "selector": "[data-testid=\"chat_input\"] > .guidance-input-surface",
+      "tier": "L1",
+      "scope": "workspace",
+      "required": true,
+      "notes": "输入器内表面；必须透明化，否则会出现白底。"
+    },
+    {
+      "key": "chat-input-editor",
+      "selector": "[data-testid=\"chat_input_input\"] [contenteditable=\"true\"]",
+      "tier": "L1",
+      "scope": "workspace",
+      "required": true,
+      "notes": "实际输入编辑器。"
+    },
+    {
+      "key": "right-panel",
+      "selector": "[data-testid=\"right-panel-container\"]",
+      "tier": "L1",
+      "scope": "right",
+      "required": false,
+      "notes": "右侧抽屉容器；收起时宽度为 0。"
+    },
+    {
+      "key": "right-side",
+      "selector": "[data-testid=\"samantha_layout_right_side\"]",
+      "tier": "L1",
+      "scope": "right",
+      "required": false,
+      "notes": "右侧工作台 aside；对话摘要面板也渲染在此节点内。"
+    },
+    {
+      "key": "summary-panel",
+      "selector": "[data-testid=\"samantha_layout_right_side\"] section[class*=\"fixedPanel\"]",
+      "tier": "L2",
+      "scope": "right",
+      "required": false,
+      "notes": "2026-09-16 CDP 实测：对话摘要主面板容器，原生白色背景 rgb(255,255,255)；使用类名前缀 fixedPanel 定位，禁止完整哈希类名。"
+    },
+    {
+      "key": "summary-panel-header",
+      "selector": "[data-testid=\"samantha_layout_right_side\"] header[class*=\"fixedPanelHeader\"]",
+      "tier": "L2",
+      "scope": "right",
+      "required": false,
+      "notes": "对话摘要标题栏，含 h2 标题和操作按钮组；原生白色背景。"
+    },
+    {
+      "key": "summary-panel-title",
+      "selector": "[data-testid=\"samantha_layout_right_side\"] h2[class*=\"fixedPanelTitle\"]",
+      "tier": "L2",
+      "scope": "right",
+      "required": false,
+      "notes": "对话摘要标题文字（\"对话摘要\"）。"
+    },
+    {
+      "key": "summary-panel-content",
+      "selector": "[data-testid=\"samantha_layout_right_side\"] div[class*=\"fixedPanelContent\"]",
+      "tier": "L2",
+      "scope": "right",
+      "required": false,
+      "notes": "对话摘要内容滚动区，内含 newSummaryContentRoot 和 modalContent。"
+    },
+    {
+      "key": "summary-group",
+      "selector": "[data-testid=\"samantha_layout_right_side\"] section[class*=\"group\"]",
+      "tier": "L2",
+      "scope": "right",
+      "required": false,
+      "notes": "对话摘要内分区（对话产物 / 对话资源 / 技能 / 最近文件），类名前缀 group。"
+    },
+    {
+      "key": "summary-group-collapse",
+      "selector": "[data-testid=\"samantha_layout_right_side\"] button[class*=\"groupCollapseButton\"]",
+      "tier": "L2",
+      "scope": "right",
+      "required": false,
+      "notes": "分区折叠/展开标题按钮。"
+    },
+    {
+      "key": "summary-clickable-item",
+      "selector": "[data-testid=\"samantha_layout_right_side\"] button[class*=\"clickableItem\"]",
+      "tier": "L2",
+      "scope": "right",
+      "required": false,
+      "notes": "分区内可点击文件/资源项，类名前缀 clickableItem。"
+    },
+    {
+      "key": "menu-overlay",
+      "selector": "[role=\"menu\"], [data-radix-popper-content-wrapper] > *",
+      "tier": "L2",
+      "scope": "overlay",
+      "required": false,
+      "notes": "Radix 菜单/弹层；使用 role=menu 和 popper 包装器兜底。"
+    },
+    {
+      "key": "dialog-overlay",
+      "selector": "[role=\"dialog\"]",
+      "tier": "L2",
+      "scope": "overlay",
+      "required": false,
+      "notes": "对话框浮层。"
+    },
+    {
+      "key": "queued-message-surface",
+      "selector": "#chat-route-main :has(> [data-testid=\"queue-message-list\"])",
+      "tier": "L2",
+      "scope": "workspace",
+      "required": false,
+      "notes": "2026-09-11 CDP 实测：执行任务时追加消息出现 queue-message-list；其直接父元素承载 rgb(255,255,255) 背景。用直接子节点 testid 定位背景层，避免依赖 hash 类名。"
+    },
+    {
+      "key": "queued-message-positioning-wrapper",
+      "selector": "#chat-route-main [data-testid=\"chat_input\"] ~ :has([data-testid=\"queue-message-list\"])",
+      "tier": "L2",
+      "scope": "workspace",
+      "required": false,
+      "notes": "2026-09-11 CDP 实测：队列定位包装为 chat_input 的兄弟节点；清除旧通用兄弟规则添加的背景、边框、阴影及模糊，避免嵌套双卡片。"
+    }
+  ],
+  "stableTestids": [
+    "chat-route-layout",
+    "chat_route_layout_leftside_nav",
+    "flow_chat_sidebar",
+    "conversation-section",
+    "flow_chat_guidance_page",
+    "chat_list_wrapper",
+    "message-list",
+    "message-block-container",
+    "union_message",
+    "message_content",
+    "message_text_content",
+    "receive_message",
+    "send_message",
+    "message_action_bar",
+    "chat_input",
+    "chat_input_input",
+    "right-panel-container",
+    "samantha_layout_right_side",
+    "queue-message-list",
+    "queue-message-item"
+  ],
+  "notes": [
+    "优先使用 data-testid；仅在 testid 缺失时使用稳定类前缀如 h-header-height、guidance-input-surface。",
+    "禁止使用 body *、div/span 通配改色和 [class*=card]/[class*=input] 这类宽泛覆盖。",
+    "正文背景遮罩从左向右渐退，艺术图只在右侧作为氛围；不要把背景铺满整个正文。",
+    "恢复时必须还原 data-theme、删除全局对象和注入节点，并清空 body 内联背景。"
+  ]
+}

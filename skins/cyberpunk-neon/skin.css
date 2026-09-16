@@ -1,0 +1,273 @@
+/* ============================================================
+   BRIGHT INDUSTRIAL MIST / RESTRAINED CYBERPUNK WORKSPACE
+   浅雾机房背景 + 银白金属与磨砂玻璃层级，不使用霓虹或重暗色。
+   ============================================================ */
+
+/* 1. 环境层：明亮整窗背景 */
+[data-testid="chat-route-layout"] {
+  position: relative !important;
+  isolation: isolate !important;
+  color: #17232b !important;
+  background-color: #dce7ec !important;
+}
+
+[data-testid="chat-route-layout"]::before {
+  content: "" !important;
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 0 !important;
+  pointer-events: none !important;
+  background-image: var(--dws-art) !important;
+  background-size: cover !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  filter: brightness(.94) saturate(.88) !important;
+}
+
+[data-testid="chat-route-layout"]::after {
+  content: "" !important;
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 0 !important;
+  pointer-events: none !important;
+  background:
+    linear-gradient(90deg, rgba(236, 244, 246, .58) 0%, rgba(240, 246, 247, .30) 28%, rgba(244, 248, 249, .12) 62%, rgba(255, 255, 255, .04) 100%),
+    linear-gradient(180deg, rgba(255, 255, 255, .28), rgba(220, 232, 237, .18)) !important;
+}
+
+[data-testid="chat-route-layout"] > * {
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+#chat-route-main,
+#chat-route-main > main {
+  background-color: transparent !important;
+  background-image: none !important;
+}
+
+#chat-route-main > main {
+  isolation: isolate !important;
+  overflow: hidden !important;
+  background:
+    linear-gradient(90deg,
+      rgba(238, 245, 247, .48) 0%,
+      rgba(244, 248, 249, .22) 36%,
+      rgba(248, 251, 251, .08) 70%,
+      transparent 100%) !important;
+}
+
+/* 2. 导航层：浅色磨砂金属 */
+[data-testid="flow_chat_sidebar"],
+[data-testid="chat_list_wrapper"],
+[data-testid="conversation-section"] {
+  background-color: transparent !important;
+  background-image: none !important;
+  color: #22313a !important;
+}
+
+[data-testid="chat_route_layout_leftside_nav"] {
+  background: linear-gradient(180deg, rgba(237, 245, 247, .78), rgba(225, 236, 240, .66)) !important;
+  border-right: 1px solid rgba(61, 84, 96, .16) !important;
+  box-shadow: 12px 0 32px rgba(62, 88, 99, .10), inset -1px 0 rgba(255, 255, 255, .55) !important;
+  backdrop-filter: blur(12px) saturate(92%) !important;
+  -webkit-backdrop-filter: blur(12px) saturate(92%) !important;
+}
+
+[data-testid="conversation-list-v2-item"] {
+  border: 1px solid transparent !important;
+  border-radius: 8px !important;
+  color: #263741 !important;
+  transition: background-color .16s ease, border-color .16s ease, box-shadow .16s ease !important;
+}
+
+[data-testid="conversation-list-v2-item"]:hover {
+  background: rgba(77, 112, 130, .08) !important;
+  border-color: rgba(61, 84, 96, .10) !important;
+}
+
+[data-testid="conversation-list-v2-item"][aria-current="page"],
+[data-testid="conversation-list-v2-item"][data-state="active"] {
+  background: linear-gradient(90deg, rgba(79, 125, 145, .18), rgba(79, 125, 145, .07)) !important;
+  border-color: rgba(79, 125, 145, .22) !important;
+  box-shadow: inset 2px 0 0 #4f7d91, inset 0 1px rgba(255,255,255,.45) !important;
+}
+
+/* 3. 顶栏与阅读层 */
+#chat-route-main > main div[class*="h-header-height"] {
+  color: #2e414b !important;
+  background: rgba(239, 246, 248, .66) !important;
+  border-bottom: 1px solid rgba(61, 84, 96, .13) !important;
+  box-shadow: 0 8px 24px rgba(62, 88, 99, .07) !important;
+  backdrop-filter: blur(14px) saturate(94%) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(94%) !important;
+}
+
+[data-testid="message-list"],
+[data-testid="message-block-container"],
+[data-testid="union_message"],
+[data-testid="receive_message"],
+[data-testid="send_message"] {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+[data-testid="receive_message"] [data-testid="message_text_content"],
+[data-testid="receive_message"] [data-testid="message_text_content"] * {
+  color: #1f2d35 !important;
+  text-shadow: 0 1px 0 rgba(255,255,255,.42) !important;
+}
+
+[data-testid="send_message"] .content-KTJ1Rj {
+  color: #f6fafb !important;
+  background: linear-gradient(145deg, rgba(64, 104, 122, .94), rgba(47, 78, 92, .94)) !important;
+  border: 1px solid rgba(47, 78, 92, .28) !important;
+  border-radius: 13px 13px 4px 13px !important;
+  box-shadow: 0 10px 24px rgba(47, 70, 80, .16), inset 0 1px rgba(255,255,255,.12) !important;
+}
+
+[data-testid="send_message"] [data-testid="message_text_content"],
+[data-testid="send_message"] [data-testid="message_text_content"] * {
+  color: #f7fbfc !important;
+  text-shadow: 0 1px 1px rgba(20, 36, 43, .18) !important;
+}
+
+[data-testid="message_action_bar"] button:hover {
+  color: #2f505d !important;
+  background: rgba(79, 125, 145, .10) !important;
+}
+
+/* 4. 控制层：明亮磨砂输入台 */
+[data-testid="chat_input"] {
+  position: relative !important;
+  color: #1d2c34 !important;
+  background: linear-gradient(180deg, rgba(252, 254, 254, .92), rgba(239, 246, 248, .90)) !important;
+  border: 1px solid rgba(61, 84, 96, .20) !important;
+  border-radius: 14px !important;
+  box-shadow:
+    0 16px 38px rgba(52, 77, 88, .16),
+    inset 0 1px rgba(255,255,255,.72),
+    inset 0 -1px rgba(150, 171, 179, .24) !important;
+  backdrop-filter: blur(16px) saturate(94%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(94%) !important;
+  transition: border-color .18s ease, box-shadow .18s ease !important;
+}
+
+[data-testid="chat_input"] > .guidance-input-surface {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+[data-testid="chat_input"]:focus-within {
+  border-color: rgba(79, 125, 145, .55) !important;
+  box-shadow:
+    0 0 0 3px rgba(79, 125, 145, .10),
+    0 18px 42px rgba(52, 77, 88, .20),
+    inset 0 1px rgba(255,255,255,.78) !important;
+}
+
+div[class*="flex-col-reverse"][class*="input-guidance"] > *:not([data-testid="chat_input"]),
+#chat-route-main :has(> [data-testid="queue-message-list"]) {
+  color: #20303a !important;
+  background: rgba(247, 251, 252, .94) !important;
+  border: 1px solid rgba(61, 84, 96, .16) !important;
+  box-shadow: 0 10px 26px rgba(52, 77, 88, .12) !important;
+  backdrop-filter: blur(14px) saturate(94%) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(94%) !important;
+}
+
+#chat-route-main [data-testid="chat_input"] ~ :has([data-testid="queue-message-list"]) {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* 5. 内容材质 */
+[data-testid="message_text_content"] pre {
+  background: rgba(244, 249, 250, .94) !important;
+  border: 1px solid rgba(61, 84, 96, .16) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 8px 20px rgba(52, 77, 88, .10), inset 0 1px rgba(255,255,255,.65) !important;
+}
+
+[data-testid="message_text_content"] :not(pre) > code {
+  color: #3e6a7c !important;
+  background: rgba(79, 125, 145, .10) !important;
+  border: 1px solid rgba(79, 125, 145, .16) !important;
+  border-radius: 4px !important;
+}
+
+[data-testid="message_text_content"] table {
+  background: rgba(247, 251, 252, .92) !important;
+  border: 1px solid rgba(61, 84, 96, .16) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 8px 20px rgba(52, 77, 88, .10) !important;
+}
+
+[data-testid="message_text_content"] thead { background: rgba(79, 125, 145, .10) !important; }
+[data-testid="message_text_content"] th,
+[data-testid="message_text_content"] td {
+  color: #1f2d35 !important;
+  border-bottom-color: rgba(61, 84, 96, .12) !important;
+}
+
+[data-testid="message_text_content"] blockquote {
+  color: #30414b !important;
+  border-left: 2px solid rgba(138, 122, 92, .62) !important;
+  background: linear-gradient(90deg, rgba(138, 122, 92, .08), transparent) !important;
+  border-radius: 0 7px 7px 0 !important;
+}
+
+/* 6. 浮层与右侧工作台 */
+[role="menu"],
+[role="dialog"],
+[data-radix-popper-content-wrapper] > * {
+  color: #1f2d35 !important;
+  background: rgba(247, 251, 252, .97) !important;
+  border: 1px solid rgba(61, 84, 96, .18) !important;
+  border-radius: 11px !important;
+  box-shadow: 0 24px 56px rgba(47, 70, 80, .20), inset 0 1px rgba(255,255,255,.72) !important;
+  backdrop-filter: blur(18px) saturate(94%) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(94%) !important;
+}
+
+[role="menu"] [data-highlighted],
+[role="menu"] [data-state="checked"],
+[role="menu"] [role="menuitem"]:hover,
+[role="menu"] [role="menuitemcheckbox"]:hover,
+[role="dialog"] button:hover {
+  background: rgba(79, 125, 145, .10) !important;
+}
+
+[data-testid="right-panel-container"],
+[data-testid="samantha_layout_right_side"] {
+  color: #1f2d35 !important;
+  background: linear-gradient(180deg, rgba(244, 249, 250, .92), rgba(232, 240, 243, .94)) !important;
+  border-left: 1px solid rgba(61, 84, 96, .16) !important;
+  box-shadow: -16px 0 38px rgba(52, 77, 88, .10) !important;
+  backdrop-filter: blur(15px) saturate(94%) !important;
+  -webkit-backdrop-filter: blur(15px) saturate(94%) !important;
+}
+
+/* 7. 欢迎页、选区与滚动条 */
+[data-testid="flow_chat_guidance_page"] { color: #1f2d35 !important; }
+[data-testid="flow_chat_guidance_page"] [class*="line-clamp"]:hover { background: rgba(79, 125, 145, .07) !important; }
+[data-testid="flow_chat_guidance_page"] [class*="text-dbx-text-h"] { color: #4f7d91 !important; }
+
+::selection {
+  color: #f8fbfc !important;
+  background: rgba(79, 125, 145, .38) !important;
+}
+
+::-webkit-scrollbar { width: 7px !important; height: 7px !important; }
+::-webkit-scrollbar-track { background: rgba(61, 84, 96, .06) !important; }
+::-webkit-scrollbar-thumb {
+  background: rgba(79, 125, 145, .28) !important;
+  border: 1px solid rgba(79, 125, 145, .08) !important;
+  border-radius: 999px !important;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(79, 125, 145, .42) !important; }

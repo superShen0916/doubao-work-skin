@@ -1,0 +1,27 @@
+{
+  "id": "sunlit-atelier",
+  "name": "晴窗猫咪",
+  "version": "1.0.0",
+  "description": "暖阳窗边的银白长毛猫，橡木与亚麻的写实摄影风，温暖治愈。",
+  "appearance": "light",
+  "background": {
+    "image": "background.png",
+    "focusX": 0.5,
+    "focusY": 0.5
+  },
+  "colors": {
+    "bg-primary": "#f2ede4",
+    "bg-secondary": "#f5f0e8",
+    "bg-tertiary": "#faf6ee",
+    "text-primary": "#3e382e",
+    "text-secondary": "#6e6458",
+    "text-tertiary": "#9e9488",
+    "accent": "#8aa078",
+    "accent-alt": "#c8a060",
+    "border": "rgba(140, 120, 90, 0.20)",
+    "sidebar-bg": "rgba(242, 237, 228, 0.84)",
+    "card-bg": "rgba(250, 246, 238, 0.89)",
+    "input-bg": "rgba(250, 246, 238, 0.95)",
+    "selection-color": "#fff5d8"
+  }
+}

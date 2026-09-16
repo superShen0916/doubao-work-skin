@@ -1,0 +1,193 @@
+/* 昼光协议：银白结构玻璃、青蓝导光与暖日照。 */
+
+/* 环境层：背景由注入器的独立图片节点承载；这里只建立堆叠上下文。 */
+[data-testid="chat-route-layout"] {
+  position: relative !important;
+  isolation: isolate !important;
+  color: var(--dws-text) !important;
+  background: var(--dws-bg) !important;
+}
+
+[data-testid="chat-route-layout"] > * {
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+#chat-route-main,
+#chat-route-main > main {
+  background-color: transparent !important;
+}
+
+/* 单层阅读遮罩：压低正文左中部，右侧保留城市纵深。 */
+#chat-route-main > main {
+  background-image:
+    linear-gradient(90deg, rgba(239, 247, 251, .72) 0%, rgba(243, 249, 252, .50) 40%, rgba(239, 248, 252, .14) 68%, rgba(255, 255, 255, .02) 100%) !important;
+  box-shadow: inset 1px 0 rgba(255, 255, 255, .48) !important;
+}
+
+/* 导航层：独立的银白舱壁，避免与正文融成一层。 */
+[data-testid="chat_route_layout_leftside_nav"] {
+  background: linear-gradient(155deg, rgba(247, 251, 253, .90), rgba(215, 234, 243, .78)) !important;
+  border-right: 1px solid rgba(41, 91, 118, .18) !important;
+  box-shadow: 14px 0 34px rgba(32, 77, 103, .13), inset -1px 0 rgba(255, 255, 255, .65) !important;
+  backdrop-filter: blur(18px) saturate(105%) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(105%) !important;
+}
+
+[data-testid="flow_chat_sidebar"],
+[data-testid="chat_list_wrapper"],
+[data-testid="conversation-section"] {
+  color: #203a4b !important;
+  background: transparent !important;
+}
+
+[data-testid="conversation-list-v2-item"] {
+  border: 1px solid transparent !important;
+  border-radius: 10px !important;
+  transition: background .18s ease, border-color .18s ease, box-shadow .18s ease !important;
+}
+
+[data-testid="conversation-list-v2-item"]:hover {
+  background: rgba(22, 141, 183, .08) !important;
+  border-color: rgba(22, 141, 183, .12) !important;
+}
+
+[data-testid="conversation-list-v2-item"][aria-current="page"],
+[data-testid="conversation-list-v2-item"][data-state="active"] {
+  background: linear-gradient(90deg, rgba(22, 141, 183, .20), rgba(255, 255, 255, .38)) !important;
+  border-color: rgba(22, 141, 183, .24) !important;
+  box-shadow: inset 3px 0 0 #159fd0, 0 7px 18px rgba(36, 104, 137, .08) !important;
+}
+
+/* 标题与正文：细金属分隔线、轻量阅读遮罩。 */
+#chat-route-main > main div[class*="h-header-height"] {
+  color: #28485b !important;
+  background: linear-gradient(90deg, rgba(244, 250, 252, .82), rgba(235, 246, 251, .54)) !important;
+  border-bottom: 1px solid rgba(49, 96, 121, .16) !important;
+  box-shadow: 0 9px 24px rgba(38, 85, 110, .08) !important;
+  backdrop-filter: blur(18px) saturate(108%) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(108%) !important;
+}
+
+[data-testid="message-list"],
+[data-testid="message-block-container"],
+[data-testid="union_message"],
+[data-testid="receive_message"],
+[data-testid="send_message"] {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+[data-testid="receive_message"] [data-testid="message_text_content"],
+[data-testid="receive_message"] [data-testid="message_text_content"] * {
+  color: #172f3e !important;
+  text-shadow: 0 1px rgba(255, 255, 255, .58) !important;
+}
+
+[data-testid="send_message"] .content-KTJ1Rj {
+  color: #f6fcff !important;
+  background: linear-gradient(145deg, rgba(19, 137, 179, .94), rgba(25, 91, 126, .94)) !important;
+  border: 1px solid rgba(13, 107, 146, .42) !important;
+  border-radius: 15px 15px 5px 15px !important;
+  box-shadow: 0 12px 28px rgba(24, 91, 125, .20), inset 0 1px rgba(255, 255, 255, .24) !important;
+}
+
+[data-testid="send_message"] [data-testid="message_text_content"],
+[data-testid="send_message"] [data-testid="message_text_content"] * {
+  color: #f7fcff !important;
+}
+
+/* 控制层：输入台是独立悬浮控制舱，而不是正文的一块白板。 */
+[data-testid="chat_input"] {
+  color: #183344 !important;
+  background: linear-gradient(165deg, rgba(253, 254, 255, .96), rgba(226, 241, 248, .92)) !important;
+  border: 1px solid rgba(40, 104, 136, .24) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 18px 44px rgba(28, 78, 104, .18), inset 0 1px rgba(255, 255, 255, .85), inset 0 -1px rgba(89, 145, 173, .22) !important;
+  backdrop-filter: blur(20px) saturate(110%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(110%) !important;
+}
+
+[data-testid="chat_input"] > .guidance-input-surface {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+[data-testid="chat_input"]:focus-within {
+  border-color: rgba(17, 156, 207, .66) !important;
+  box-shadow: 0 0 0 3px rgba(24, 163, 210, .12), 0 20px 48px rgba(28, 78, 104, .22), inset 0 1px rgba(255, 255, 255, .90) !important;
+}
+
+div[class*="flex-col-reverse"][class*="input-guidance"] > *:not([data-testid="chat_input"]),
+#chat-route-main :has(> [data-testid="queue-message-list"]) {
+  color: #1a3648 !important;
+  background: rgba(244, 251, 253, .95) !important;
+  border: 1px solid rgba(40, 104, 136, .18) !important;
+  box-shadow: 0 12px 30px rgba(31, 82, 108, .14) !important;
+  backdrop-filter: blur(17px) !important;
+  -webkit-backdrop-filter: blur(17px) !important;
+}
+
+#chat-route-main [data-testid="chat_input"] ~ :has([data-testid="queue-message-list"]) {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* 内容材质、浮层和右侧工作台形成第三层结构。 */
+[data-testid="message_text_content"] pre,
+[data-testid="message_text_content"] table {
+  background: rgba(246, 251, 253, .94) !important;
+  border: 1px solid rgba(44, 96, 123, .17) !important;
+  box-shadow: 0 9px 24px rgba(32, 82, 108, .10), inset 0 1px rgba(255, 255, 255, .72) !important;
+}
+
+[data-testid="message_text_content"] thead {
+  background: rgba(22, 141, 183, .10) !important;
+}
+
+[data-testid="message_text_content"] :not(pre) > code {
+  color: #087ca9 !important;
+  background: rgba(18, 144, 189, .10) !important;
+  border: 1px solid rgba(18, 144, 189, .16) !important;
+}
+
+[data-testid="message_text_content"] blockquote {
+  color: #35576a !important;
+  border-left-color: rgba(224, 155, 85, .78) !important;
+  background: linear-gradient(90deg, rgba(224, 155, 85, .10), transparent) !important;
+}
+
+[role="menu"],
+[role="dialog"],
+[data-radix-popper-content-wrapper] > * {
+  color: #183241 !important;
+  background: rgba(248, 252, 254, .97) !important;
+  border: 1px solid rgba(44, 96, 123, .20) !important;
+  box-shadow: 0 26px 64px rgba(27, 69, 92, .22), inset 0 1px rgba(255, 255, 255, .76) !important;
+  backdrop-filter: blur(22px) saturate(108%) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(108%) !important;
+}
+
+[data-testid="right-panel-container"],
+[data-testid="samantha_layout_right_side"] {
+  color: #193544 !important;
+  background: linear-gradient(180deg, rgba(245, 251, 253, .96), rgba(218, 236, 244, .94)) !important;
+  border-left: 1px solid rgba(43, 99, 128, .20) !important;
+  box-shadow: -16px 0 38px rgba(32, 78, 104, .13) !important;
+  backdrop-filter: blur(18px) saturate(105%) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(105%) !important;
+}
+
+::selection {
+  color: #f7fdff !important;
+  background: rgba(13, 137, 181, .48) !important;
+}
+
+::-webkit-scrollbar-track { background: rgba(40, 91, 117, .05) !important; }
+::-webkit-scrollbar-thumb { background: rgba(20, 130, 171, .30) !important; }
+::-webkit-scrollbar-thumb:hover { background: rgba(20, 130, 171, .46) !important; }

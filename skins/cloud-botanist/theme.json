@@ -1,0 +1,27 @@
+{
+  "id": "cloud-botanist",
+  "name": "云端来信",
+  "version": "1.0.0",
+  "description": "雾霾蓝天空下的短发植物学家，温室花架与垂藤，中央湖雾通透的治愈系插画。",
+  "appearance": "light",
+  "background": {
+    "image": "background.png",
+    "focusX": 0.5,
+    "focusY": 0.5
+  },
+  "colors": {
+    "bg-primary": "#e7edf0",
+    "bg-secondary": "#eef2f4",
+    "bg-tertiary": "#f6f4ef",
+    "text-primary": "#2e3a3e",
+    "text-secondary": "#5e6a6e",
+    "text-tertiary": "#8e9a9e",
+    "accent": "#7aa898",
+    "accent-alt": "#d49080",
+    "border": "rgba(100, 130, 140, 0.20)",
+    "sidebar-bg": "rgba(234, 240, 242, 0.84)",
+    "card-bg": "rgba(248, 248, 244, 0.89)",
+    "input-bg": "rgba(248, 248, 244, 0.95)",
+    "selection-color": "#e8fff5"
+  }
+}

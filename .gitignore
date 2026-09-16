@@ -1,0 +1,26 @@
+# macOS
+.DS_Store
+
+# Node.js
+node_modules/
+
+# Runtime / local logs and state
+*.log
+*.local
+
+# Editor / OS noise
+.vscode/
+.idea/
+
+# Local credentials and diagnostic output
+.env
+.env.*
+!.env.example
+/doubao-work-dom-fixture-*.json
+/diagnostics/
+/coverage/
+*.tgz
+
+# macOS release artifacts and verified runtime downloads
+/dist/
+/.build/

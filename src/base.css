@@ -1,0 +1,660 @@
+/* Gothic Void Refined v3 — fully variable-driven with motion */
+
+/* === 1. Application surfaces === */
+[data-testid="chat-route-layout"] {
+  background: var(--dws-bg) !important;
+  color: var(--dws-text) !important;
+}
+#chat-route-main {
+  background: var(--dws-bg) !important;
+}
+#chat-route-main > main {
+  position: relative !important;
+  isolation: isolate !important;
+  overflow: hidden !important;
+  background-image:
+    linear-gradient(90deg,
+      color-mix(in srgb, var(--dws-bg) 78%, transparent) 0%,
+      color-mix(in srgb, var(--dws-bg) 58%, transparent) 35%,
+      color-mix(in srgb, var(--dws-bg) 32%, transparent) 60%,
+      color-mix(in srgb, var(--dws-bg) 12%, transparent) 100%),
+    var(--dws-art) !important;
+  background-size: 100% 100%, cover !important;
+  background-position: center, var(--dws-bg-focus-x, 78%) var(--dws-bg-focus-y, 50%) !important;
+  background-repeat: no-repeat !important;
+}
+
+/* === 2. Sidebar — gradient surface + animated items === */
+[data-testid="chat_route_layout_leftside_nav"],
+[data-testid="flow_chat_sidebar"] {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--dws-sidebar) 100%, transparent) 0%,
+    color-mix(in srgb, var(--dws-bg) 96%, transparent) 100%) !important;
+}
+[data-testid="chat_route_layout_leftside_nav"] {
+  border-right: 1px solid var(--dws-line) !important;
+  box-shadow: 12px 0 36px rgba(0,0,0,.14) !important;
+}
+[data-testid="conversation-list-v2-item"] {
+  border: 0 !important;
+  transition: background .2s ease, box-shadow .2s ease !important;
+}
+[data-testid="conversation-list-v2-item"]:hover {
+  background: color-mix(in srgb, var(--dws-accent) 8%, transparent) !important;
+}
+[data-testid="conversation-list-v2-item"][aria-current="page"],
+[data-testid="conversation-list-v2-item"][data-state="active"] {
+  background: color-mix(in srgb, var(--dws-accent) 13%, transparent) !important;
+  box-shadow: inset 2px 0 0 var(--dws-accent) !important;
+}
+
+/* === 3. Header — frosted glass === */
+#chat-route-main > main > div:first-child {
+  background: transparent !important;
+}
+#chat-route-main > main div[class*="h-header-height"] {
+  background: color-mix(in srgb, var(--dws-bg) 88%, transparent) !important;
+  border-bottom-color: var(--dws-line) !important;
+  color: var(--dws-text-muted) !important;
+  backdrop-filter: blur(18px) saturate(110%) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(110%) !important;
+  transition: background .25s ease !important;
+}
+#chat-route-main > main div[class*="h-header-height"] * {
+  color: inherit !important;
+}
+#chat-route-main > main div[class*="h-header-height"] button {
+  color: var(--dws-text-muted) !important;
+  transition: color .2s ease, background .2s ease !important;
+  border-radius: 8px !important;
+}
+#chat-route-main > main div[class*="h-header-height"] button:hover {
+  color: var(--dws-text) !important;
+  background: color-mix(in srgb, var(--dws-accent) 8%, transparent) !important;
+}
+
+/* === 4. Message list — transparent, bubbles carry color === */
+[data-testid="message-list"] {
+  background: transparent !important;
+}
+[data-testid="message-block-container"] {
+  border: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+[data-testid="union_message"] {
+  background: transparent !important;
+}
+[data-testid="receive_message"],
+[data-testid="send_message"] {
+  border: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+[data-testid="send_message"] .content-KTJ1Rj {
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--dws-accent) 22%, transparent),
+    color-mix(in srgb, var(--dws-accent) 10%, transparent)) !important;
+  border: 1px solid color-mix(in srgb, var(--dws-accent) 25%, transparent) !important;
+  color: var(--dws-text) !important;
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--dws-accent) 12%, transparent) !important;
+  border-radius: 16px !important;
+  transition: box-shadow .25s ease !important;
+}
+[data-testid="send_message"] .content-KTJ1Rj:hover {
+  box-shadow: 0 6px 24px color-mix(in srgb, var(--dws-accent) 20%, transparent) !important;
+}
+[data-testid="receive_message"] [data-testid="message_text_content"],
+[data-testid="receive_message"] [data-testid="message_text_content"] * {
+  color: var(--dws-text) !important;
+}
+[data-testid="send_message"] [data-testid="message_text_content"],
+[data-testid="send_message"] [data-testid="message_text_content"] * {
+  color: var(--dws-text) !important;
+}
+[data-testid="message_content"] { color: var(--dws-text) !important; }
+[data-testid="message_content"] :where(h1,h2,h3,h4,h5,h6,p,li,strong,em,blockquote,td,th,span:not([style])) {
+  color: inherit !important;
+}
+[data-testid="message_action_bar"] { opacity: .82; transition: opacity .2s ease; }
+[data-testid="message_action_bar"]:hover { opacity: 1; }
+[data-testid="message_action_bar"] button {
+  transition: background .2s ease, color .2s ease !important;
+  border-radius: 6px !important;
+}
+[data-testid="message_action_bar"] button:hover {
+  background: color-mix(in srgb, var(--dws-accent) 9%, transparent) !important;
+  color: var(--dws-accent) !important;
+}
+
+/* === 5. Markdown tables === */
+[data-testid="message_text_content"] table {
+  width: 100% !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  overflow: hidden !important;
+  background: color-mix(in srgb, var(--dws-panel) 78%, transparent) !important;
+  border: 1px solid var(--dws-line) !important;
+  border-radius: 12px !important;
+}
+[data-testid="message_text_content"] thead {
+  background: color-mix(in srgb, var(--dws-accent) 9%, transparent) !important;
+}
+[data-testid="message_text_content"] th,
+[data-testid="message_text_content"] td {
+  background: transparent !important;
+  color: var(--dws-text) !important;
+  border: 0 !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--dws-text) 8%, transparent) !important;
+}
+[data-testid="message_text_content"] tr:last-child td { border-bottom: 0 !important; }
+
+/* === 6. Composer — glass surface with focus glow === */
+[data-testid="chat_input"] {
+  background: color-mix(in srgb, var(--dws-input) 94%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--dws-accent) 18%, transparent) !important;
+  box-shadow: 0 18px 48px rgba(0,0,0,.28) !important;
+  backdrop-filter: blur(18px) saturate(110%) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(110%) !important;
+  border-radius: 16px !important;
+  transition: border-color .25s ease, box-shadow .25s ease !important;
+}
+[data-testid="chat_input"]::after {
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+[data-testid="chat_input"] > .guidance-input-surface {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+[data-testid="chat_input"]:focus-within {
+  border-color: color-mix(in srgb, var(--dws-accent) 55%, transparent) !important;
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--dws-accent) 10%, transparent),
+    0 0 24px color-mix(in srgb, var(--dws-accent) 18%, transparent),
+    0 18px 48px rgba(0,0,0,.32) !important;
+}
+[data-testid="chat_input_input"],
+[data-testid="chat_input_input"] [contenteditable="true"] {
+  background: transparent !important;
+  color: var(--dws-text) !important;
+}
+[data-testid="chat_input"] [data-dbx-name="button"] {
+  transition: background .2s ease !important;
+  border-radius: 8px !important;
+}
+[data-testid="chat_input"] [data-dbx-name="button"]:hover {
+  background: color-mix(in srgb, var(--dws-accent) 9%, transparent) !important;
+}
+
+/* === 7. Code and quote surfaces === */
+[data-testid="message_text_content"] pre {
+  background: color-mix(in srgb, var(--dws-panel-alt) 100%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--dws-text) 10%, transparent) !important;
+  box-shadow: none !important;
+  border-radius: 10px !important;
+}
+[data-testid="message_text_content"] :not(pre) > code {
+  color: var(--dws-accent-alt) !important;
+  background: color-mix(in srgb, var(--dws-accent) 10%, transparent) !important;
+  border: 0 !important;
+  border-radius: 4px !important;
+  padding: 1px 5px !important;
+}
+[data-testid="message_text_content"] blockquote {
+  border-left-color: color-mix(in srgb, var(--dws-accent) 45%, transparent) !important;
+  background: color-mix(in srgb, var(--dws-accent) 5%, transparent) !important;
+  border-radius: 0 8px 8px 0 !important;
+}
+
+/* === 8. Right panel and overlays === */
+[data-testid="right-panel-container"],
+[data-testid="samantha_layout_right_side"] {
+  background: var(--dws-panel) !important;
+  border-left-color: var(--dws-line) !important;
+}
+[role="menu"], [role="dialog"], [data-radix-popper-content-wrapper] > * {
+  background: var(--dws-panel-alt) !important;
+  color: var(--dws-text) !important;
+  border: 1px solid var(--dws-line) !important;
+  box-shadow: 0 24px 64px rgba(0,0,0,.42) !important;
+  border-radius: 12px !important;
+}
+[role="menu"] *, [role="dialog"] *, [data-radix-popper-content-wrapper] * {
+  color: inherit !important;
+}
+[role="menu"] [data-highlighted],
+[role="menu"] [data-state="checked"],
+[role="menu"] [role="menuitem"]:hover,
+[role="menu"] [role="menuitemcheckbox"]:hover,
+[role="dialog"] button:hover {
+  background: color-mix(in srgb, var(--dws-accent) 10%, transparent) !important;
+}
+[role="menu"] svg, [role="dialog"] svg {
+  color: var(--dws-text-muted) !important;
+}
+
+/* === 9. Scrollbar & selection === */
+::selection {
+  background: color-mix(in srgb, var(--dws-accent) 34%, transparent) !important;
+  color: var(--dws-selection-color, #fff) !important;
+}
+::-webkit-scrollbar { width: 7px; height: 7px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--dws-text-muted) 25%, transparent);
+  border-radius: 999px;
+  transition: background .2s ease;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--dws-accent) 40%, transparent);
+}
+
+/* === 区域级文字/图标颜色 === */
+[data-testid="chat_route_layout_leftside_nav"],
+[data-testid="flow_chat_sidebar"],
+[data-testid="chat_list_wrapper"],
+[data-testid="conversation-section"] {
+  color: var(--dws-text) !important;
+}
+[data-testid="chat_route_layout_leftside_nav"] *,
+[data-testid="flow_chat_sidebar"] *,
+[data-testid="chat_list_wrapper"] *,
+[data-testid="conversation-section"] * {
+  color: inherit !important;
+  fill: currentColor !important;
+}
+[data-testid="chat_route_layout_leftside_nav"] svg,
+[data-testid="flow_chat_sidebar"] svg,
+[data-testid="chat_list_wrapper"] svg,
+[data-testid="conversation-section"] svg {
+  color: var(--dws-text-muted) !important;
+  fill: currentColor !important;
+}
+[data-testid="conversation-list-v2-item"]:hover *,
+[data-testid="conversation-list-v2-item"][aria-current="page"] *,
+[data-testid="conversation-list-v2-item"][data-state="active"] * {
+  color: var(--dws-text) !important;
+}
+
+#chat-route-main > main div[class*="h-header-height"] {
+  color: var(--dws-text-muted) !important;
+}
+#chat-route-main > main div[class*="h-header-height"] * {
+  color: inherit !important;
+  fill: currentColor !important;
+}
+#chat-route-main > main div[class*="h-header-height"] svg {
+  color: inherit !important;
+  fill: currentColor !important;
+}
+
+[data-testid="chat_input"],
+[data-testid="chat_input"] > .guidance-input-surface,
+[data-testid="chat_input_input"] {
+  color: var(--dws-text) !important;
+}
+[data-testid="chat_input"] *,
+[data-testid="chat_input"] > .guidance-input-surface *,
+[data-testid="chat_input_input"] * {
+  color: inherit !important;
+  fill: currentColor !important;
+}
+[data-testid="chat_input"] svg,
+[data-testid="chat_input"] > .guidance-input-surface svg,
+[data-testid="chat_input_input"] svg {
+  color: var(--dws-text-muted) !important;
+  fill: currentColor !important;
+}
+[data-testid="chat_input"] [contenteditable="true"]::placeholder,
+[data-testid="chat_input"] [contenteditable="true"] p.is-empty::before {
+  color: var(--dws-text-subtle) !important;
+  opacity: 1 !important;
+}
+[data-testid="chat_input"] [contenteditable="true"] * {
+  color: var(--dws-text) !important;
+}
+
+[data-testid="message_action_bar"] {
+  color: var(--dws-text-muted) !important;
+}
+[data-testid="message_action_bar"] * {
+  color: inherit !important;
+  fill: currentColor !important;
+}
+[data-testid="message_action_bar"] button:hover * {
+  color: var(--dws-accent) !important;
+}
+
+[data-testid="right-panel-container"],
+[data-testid="samantha_layout_right_side"] {
+  color: var(--dws-text) !important;
+}
+[data-testid="right-panel-container"] *,
+[data-testid="samantha_layout_right_side"] * {
+  color: inherit !important;
+  fill: currentColor !important;
+}
+
+/* === 10. Welcome / Guidance page === */
+[data-testid="flow_chat_guidance_page"] {
+  color: var(--dws-text) !important;
+}
+[data-testid="flow_chat_guidance_page"] *::after,
+[data-testid="flow_chat_guidance_page"] *::before {
+  background-color: transparent !important;
+}
+[data-testid="flow_chat_guidance_page"] .text-dbx-text-primary,
+[data-testid="flow_chat_guidance_page"] [class*="font-semibold"] {
+  color: var(--dws-text) !important;
+}
+[data-testid="flow_chat_guidance_page"] img {
+  background: transparent !important;
+}
+[data-testid="flow_chat_guidance_page"] .text-dbx-text-tertiary,
+[data-testid="flow_chat_guidance_page"] h2 {
+  color: var(--dws-text-muted) !important;
+}
+[data-testid="flow_chat_guidance_page"] .text-dbx-text-highlight,
+[data-testid="flow_chat_guidance_page"] [class*="line-clamp"] {
+  color: var(--dws-text) !important;
+  transition: background .2s ease !important;
+  border-radius: 10px !important;
+}
+[data-testid="flow_chat_guidance_page"] [class*="text-dbx-text-h"] {
+  color: var(--dws-accent) !important;
+}
+[data-testid="flow_chat_guidance_page"] [class*="line-clamp"]:hover {
+  background: color-mix(in srgb, var(--dws-accent) 6%, transparent) !important;
+}
+
+/* === 11. Non-chat pages fallback === */
+body:not(:has([data-testid="chat-route-layout"])) {
+  background: transparent !important;
+  color: var(--dws-text) !important;
+}
+body:not(:has([data-testid="chat-route-layout"])) :where(button, [role="button"]) {
+  background: color-mix(in srgb, var(--dws-panel) 64%, transparent) !important;
+  color: var(--dws-text) !important;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+  transition: background .2s ease !important;
+  border-radius: 10px !important;
+}
+body:not(:has([data-testid="chat-route-layout"])) :where(button, [role="button"]):hover {
+  background: color-mix(in srgb, var(--dws-panel-alt) 76%, transparent) !important;
+}
+body:not(:has([data-testid="chat-route-layout"])) :where(button, [role="button"]):focus-visible {
+  outline: 1px solid color-mix(in srgb, var(--dws-accent) 55%, transparent) !important;
+  outline-offset: 2px !important;
+  box-shadow: none !important;
+}
+body:not(:has([data-testid="chat-route-layout"])) :where(input, textarea, [contenteditable="true"]) {
+  background: color-mix(in srgb, var(--dws-input) 62%, transparent) !important;
+  color: var(--dws-text) !important;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+  border-radius: 10px !important;
+}
+body:not(:has([data-testid="chat-route-layout"])) :where(input, textarea, [contenteditable="true"]):focus {
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--dws-accent) 45%, transparent) !important;
+}
+body:not(:has([data-testid="chat-route-layout"])) :where(input, textarea)::placeholder {
+  color: var(--dws-text-subtle) !important;
+}
+body:not(:has([data-testid="chat-route-layout"])) [role="tab"] {
+  background: transparent !important;
+  color: var(--dws-text-muted) !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+body:not(:has([data-testid="chat-route-layout"])) [role="tab"][aria-selected="true"] {
+  color: var(--dws-text) !important;
+}
+
+/* === 12. New tab page === */
+[class*="tabContent"] {
+  color: var(--dws-text) !important;
+}
+[class*="tabContent"] [class*="tabPanel"],
+[class*="tabContent"] [class*="selector"] {
+  background: var(--dws-bg) !important;
+}
+[class*="tabContent"] [class*="omnibox"] {
+  background: var(--dws-input) !important;
+  border: 1px solid var(--dws-line) !important;
+  box-shadow: none !important;
+  border-radius: 14px !important;
+  transition: border-color .25s ease, box-shadow .25s ease !important;
+}
+[class*="tabContent"] [class*="omnibox"]:focus-within {
+  border-color: color-mix(in srgb, var(--dws-accent) 50%, transparent) !important;
+  box-shadow: 0 0 20px color-mix(in srgb, var(--dws-accent) 15%, transparent) !important;
+}
+[class*="tabContent"] [class*="inputContainer"] {
+  background: transparent !important;
+}
+[class*="tabContent"] input[placeholder="搜索或输入网址"] {
+  background: transparent !important;
+  color: var(--dws-text) !important;
+}
+[class*="tabContent"] input[placeholder="搜索或输入网址"]::placeholder {
+  color: var(--dws-text-subtle) !important;
+}
+[class*="tabContent"] button[class*="actionButton"] {
+  background: var(--dws-card) !important;
+  color: var(--dws-text) !important;
+  border: 1px solid var(--dws-line) !important;
+  box-shadow: none !important;
+  border-radius: 12px !important;
+  transition: background .2s ease, transform .15s ease !important;
+}
+[class*="tabContent"] button[class*="actionButton"]:hover {
+  background: var(--dws-panel-alt) !important;
+  transform: translateY(-1px) !important;
+}
+[class*="tabContent"] button[class*="rowButton"] {
+  background: transparent !important;
+  color: var(--dws-text) !important;
+  transition: background .2s ease !important;
+  border-radius: 8px !important;
+}
+[class*="tabContent"] button[class*="rowButton"]:hover {
+  background: color-mix(in srgb, var(--dws-accent) 8%, transparent) !important;
+}
+[class*="tabContent"] button[class*="viewMoreButton"] {
+  color: var(--dws-text-muted) !important;
+}
+[class*="tabBar"] {
+  background: var(--dws-bg) !important;
+  color: var(--dws-text) !important;
+}
+[class*="tabBar"] [role="tab"] {
+  background: transparent !important;
+  color: var(--dws-text-muted) !important;
+  transition: color .2s ease, background .2s ease !important;
+  border-radius: 8px !important;
+}
+[class*="tabBar"] [role="tab"][aria-selected="true"] {
+  background: var(--dws-panel) !important;
+  color: var(--dws-text) !important;
+}
+
+/* === 13. 任务进行中状态条（输入框上方 pending/generating 栏） === */
+/* 状态条是输入框父容器的子元素，flex-col-reverse 使其显示在输入框上方 */
+div[class*="flex-col-reverse"][class*="input-guidance"] > *:not([data-testid="chat_input"]) {
+  background: color-mix(in srgb, var(--dws-input) 96%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--dws-accent) 20%, transparent) !important;
+  border-radius: 16px !important;
+  color: var(--dws-text) !important;
+  backdrop-filter: blur(18px) saturate(110%) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(110%) !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,.28) !important;
+}
+div[class*="flex-col-reverse"][class*="input-guidance"] > *:not([data-testid="chat_input"]) * {
+  color: var(--dws-text) !important;
+  fill: currentColor !important;
+}
+div[class*="flex-col-reverse"][class*="input-guidance"] > *:not([data-testid="chat_input"]) svg {
+  color: var(--dws-text-muted) !important;
+  fill: currentColor !important;
+}
+div[class*="flex-col-reverse"][class*="input-guidance"] > *:not([data-testid="chat_input"]) button {
+  background: color-mix(in srgb, var(--dws-accent) 14%, transparent) !important;
+  color: var(--dws-text) !important;
+  border-radius: 8px !important;
+  transition: background .2s ease !important;
+}
+div[class*="flex-col-reverse"][class*="input-guidance"] > *:not([data-testid="chat_input"]) button:hover {
+  background: color-mix(in srgb, var(--dws-accent) 24%, transparent) !important;
+}
+/* 兜底：chat_input 的通用兄弟元素 */
+[data-testid="chat_input"] ~ :not([data-testid="chat_input"]) {
+  background: color-mix(in srgb, var(--dws-input) 96%, transparent) !important;
+  color: var(--dws-text) !important;
+}
+[data-testid="chat_input"] ~ :not([data-testid="chat_input"]) * {
+  color: var(--dws-text) !important;
+}
+
+/* === 8. 输入器运行时提示条（AI 生成中动态插入的横幅） === */
+/* flex-col-reverse 容器中 chat_input 之后的兄弟元素（显示在输入框上方） */
+[data-testid="chat_input"] ~ * {
+  background: var(--dws-panel) !important;
+  color: var(--dws-text) !important;
+  border-color: var(--dws-line) !important;
+  border-radius: 12px !important;
+}
+[data-testid="chat_input"] ~ * button,
+[data-testid="chat_input"] ~ * [role="button"],
+[data-testid="chat_input"] ~ * svg {
+  color: var(--dws-text-muted) !important;
+  fill: currentColor !important;
+}
+[data-testid="chat_input"] ~ * button:hover,
+[data-testid="chat_input"] ~ * [role="button"]:hover {
+  color: var(--dws-text) !important;
+  background: color-mix(in srgb, var(--dws-accent) 10%, transparent) !important;
+}
+
+/* Queued follow-up messages: the list's parent owns the native white surface. */
+#chat-route-main :has(> [data-testid="queue-message-list"]) {
+  background: var(--dws-panel) !important;
+  color: var(--dws-text) !important;
+  border-color: var(--dws-line) !important;
+}
+
+/* The positioning wrapper must not add a second card around the queue. */
+#chat-route-main [data-testid="chat_input"] ~ :has([data-testid="queue-message-list"]) {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* === 14. 对话摘要面板（右侧 fixedPanel） === */
+/* 2026-09-16 CDP 实测：对话摘要面板渲染在 samantha_layout_right_side 内，
+   主容器为 section[class*="fixedPanel"]，原生白色背景未被旧规则覆盖。 */
+[data-testid="samantha_layout_right_side"] section[class*="fixedPanel"] {
+  background: var(--dws-panel) !important;
+  border-left: 1px solid var(--dws-line) !important;
+  box-shadow: -10px 0 28px rgba(0,0,0,.10) !important;
+  color: var(--dws-text) !important;
+}
+[data-testid="samantha_layout_right_side"] section[class*="fixedPanel"] * {
+  color: inherit !important;
+  fill: currentColor !important;
+}
+
+/* 标题栏：与面板同色，底部分隔线 */
+[data-testid="samantha_layout_right_side"] header[class*="fixedPanelHeader"] {
+  background: transparent !important;
+  border-bottom: 1px solid var(--dws-line) !important;
+  color: var(--dws-text) !important;
+}
+[data-testid="samantha_layout_right_side"] h2[class*="fixedPanelTitle"] {
+  color: var(--dws-text) !important;
+}
+
+/* 标题栏操作按钮 */
+[data-testid="samantha_layout_right_side"] div[class*="fixedPanelHeaderActions"] button {
+  color: var(--dws-text-muted) !important;
+  transition: background .2s ease, color .2s ease !important;
+  border-radius: 6px !important;
+}
+[data-testid="samantha_layout_right_side"] div[class*="fixedPanelHeaderActions"] button:hover {
+  background: color-mix(in srgb, var(--dws-accent) 10%, transparent) !important;
+  color: var(--dws-text) !important;
+}
+[data-testid="samantha_layout_right_side"] div[class*="fixedPanelHeaderActions"] svg {
+  color: var(--dws-text-muted) !important;
+  fill: currentColor !important;
+}
+
+/* 内容区保持透明，由面板承载背景 */
+[data-testid="samantha_layout_right_side"] div[class*="fixedPanelContent"],
+[data-testid="samantha_layout_right_side"] div[class*="newSummaryContentRoot"],
+[data-testid="samantha_layout_right_side"] div[class*="modalContentRoot"],
+[data-testid="samantha_layout_right_side"] div[class*="modalContent"] {
+  background: transparent !important;
+  color: var(--dws-text) !important;
+}
+
+/* 分区容器（对话产物 / 对话资源 / 技能 / 最近文件） */
+[data-testid="samantha_layout_right_side"] section[class*="group"] {
+  background: transparent !important;
+  color: var(--dws-text) !important;
+}
+
+/* 分区折叠标题按钮 */
+[data-testid="samantha_layout_right_side"] button[class*="groupCollapseButton"] {
+  color: var(--dws-text-muted) !important;
+  transition: color .2s ease, background .2s ease !important;
+  border-radius: 6px !important;
+}
+[data-testid="samantha_layout_right_side"] button[class*="groupCollapseButton"]:hover {
+  color: var(--dws-text) !important;
+  background: color-mix(in srgb, var(--dws-accent) 8%, transparent) !important;
+}
+[data-testid="samantha_layout_right_side"] button[class*="groupCollapseButton"] svg {
+  color: var(--dws-text-muted) !important;
+  fill: currentColor !important;
+}
+
+/* 分区内添加按钮（+） */
+[data-testid="samantha_layout_right_side"] section[class*="group"] > button:not([class*="groupCollapseButton"]) {
+  color: var(--dws-text-muted) !important;
+  transition: background .2s ease, color .2s ease !important;
+  border-radius: 6px !important;
+}
+[data-testid="samantha_layout_right_side"] section[class*="group"] > button:not([class*="groupCollapseButton"]):hover {
+  background: color-mix(in srgb, var(--dws-accent) 10%, transparent) !important;
+  color: var(--dws-accent) !important;
+}
+
+/* 可点击文件/资源项 */
+[data-testid="samantha_layout_right_side"] button[class*="clickableItem"] {
+  color: var(--dws-text) !important;
+  transition: background .2s ease !important;
+  border-radius: 8px !important;
+}
+[data-testid="samantha_layout_right_side"] button[class*="clickableItem"]:hover {
+  background: color-mix(in srgb, var(--dws-accent) 9%, transparent) !important;
+}
+[data-testid="samantha_layout_right_side"] button[class*="clickableItem"] svg,
+[data-testid="samantha_layout_right_side"] div[class*="itemIcon"],
+[data-testid="samantha_layout_right_side"] div[class*="conversationResourceImageIcon"],
+[data-testid="samantha_layout_right_side"] div[class*="recentContentItemIcon"] {
+  color: var(--dws-text-muted) !important;
+  fill: currentColor !important;
+}
+
+/* 面板内滚动条 */
+[data-testid="samantha_layout_right_side"] div[class*="scrollRoot"] {
+  scrollbar-width: thin !important;
+  scrollbar-color: color-mix(in srgb, var(--dws-text-muted) 30%, transparent) transparent !important;
+}

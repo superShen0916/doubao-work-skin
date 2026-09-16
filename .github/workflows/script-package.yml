@@ -1,0 +1,29 @@
+name: Build script package
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: macos-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm run check
+      - run: npm test
+      - run: npm run build:release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-scripts
+          path: |
+            dist/*-macos-scripts.zip
+            dist/*-macos-scripts.zip.sha256
+            dist/*-skill.zip
+            dist/*-skill.zip.sha256
+          if-no-files-found: error

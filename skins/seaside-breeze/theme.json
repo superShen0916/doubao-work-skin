@@ -1,0 +1,27 @@
+{
+  "id": "seaside-breeze",
+  "name": "海风微语",
+  "version": "1.0.0",
+  "description": "青绿色海面与暖白天空，右侧短发女孩回望，安静通透的海边午后。",
+  "appearance": "light",
+  "background": {
+    "image": "background.png",
+    "focusX": 0.5,
+    "focusY": 0.5
+  },
+  "colors": {
+    "bg-primary": "#e6efee",
+    "bg-secondary": "#eef3f1",
+    "bg-tertiary": "#f7f5ef",
+    "text-primary": "#2a3a3a",
+    "text-secondary": "#5a6a6a",
+    "text-tertiary": "#8a9a9a",
+    "accent": "#5ba8a0",
+    "accent-alt": "#d4a574",
+    "border": "rgba(91, 140, 143, 0.20)",
+    "sidebar-bg": "rgba(233, 241, 239, 0.84)",
+    "card-bg": "rgba(247, 248, 244, 0.89)",
+    "input-bg": "rgba(247, 248, 244, 0.95)",
+    "selection-color": "#e8fff8"
+  }
+}

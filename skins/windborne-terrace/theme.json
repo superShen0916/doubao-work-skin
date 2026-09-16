@@ -1,0 +1,27 @@
+{
+  "id": "windborne-terrace",
+  "name": "风起云庭",
+  "version": "1.0.0",
+  "description": "原神风格的风法师与浮空石庭，翡翠绿与金色的奇幻冒险氛围。",
+  "appearance": "light",
+  "background": {
+    "image": "background.png",
+    "focusX": 0.5,
+    "focusY": 0.5
+  },
+  "colors": {
+    "bg-primary": "#e5efe7",
+    "bg-secondary": "#edf4ec",
+    "bg-tertiary": "#f6f8f0",
+    "text-primary": "#2e3e32",
+    "text-secondary": "#5e6e62",
+    "text-tertiary": "#8e9e92",
+    "accent": "#5ab080",
+    "accent-alt": "#d4b050",
+    "border": "rgba(90, 140, 100, 0.20)",
+    "sidebar-bg": "rgba(231, 240, 233, 0.84)",
+    "card-bg": "rgba(246, 248, 240, 0.89)",
+    "input-bg": "rgba(246, 248, 240, 0.95)",
+    "selection-color": "#e8ffe0"
+  }
+}

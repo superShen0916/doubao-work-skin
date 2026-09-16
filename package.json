@@ -1,0 +1,33 @@
+{
+  "name": "doubao-work-skin",
+  "version": "2.1.0",
+  "description": "豆包工作 macOS 桌面端皮肤系统：本地 CDP 注入、可扩展主题、自动恢复与一键还原",
+  "type": "module",
+  "main": "skin.mjs",
+  "scripts": {
+    "test": "node --test",
+    "start": "node skin.mjs start",
+    "launch": "node skin.mjs start --force",
+    "shortcut": "node scripts/install-shortcut.mjs",
+    "stop": "node skin.mjs stop",
+    "status": "node skin.mjs status",
+    "verify": "node skin.mjs verify",
+    "restore": "node skin.mjs restore",
+    "capture": "node src/capture-dom.mjs --port 9342",
+    "inject": "node src/injector.mjs --once --port 9342 --skin skins/seaside-breeze",
+    "watch": "node src/injector.mjs --watch --port 9342 --skin skins/seaside-breeze",
+    "check": "node scripts/check.mjs",
+    "build:release": "node scripts/build-release.mjs"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "license": "MIT",
+  "keywords": [
+    "doubao",
+    "doubao-work",
+    "skin",
+    "theme",
+    "cdp"
+  ]
+}

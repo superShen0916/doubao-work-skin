@@ -1,0 +1,27 @@
+{
+  "id": "washi-crane-mist",
+  "name": "纸上云汀",
+  "version": "1.0.0",
+  "description": "和纸雕塑的仙鹤与折纸山峦，鼠尾草绿与古铜金的东方极简意境。",
+  "appearance": "light",
+  "background": {
+    "image": "background.png",
+    "focusX": 0.5,
+    "focusY": 0.5
+  },
+  "colors": {
+    "bg-primary": "#f0ede4",
+    "bg-secondary": "#f4f1ea",
+    "bg-tertiary": "#f8f5ee",
+    "text-primary": "#3a3830",
+    "text-secondary": "#6a6658",
+    "text-tertiary": "#9a9688",
+    "accent": "#8aa890",
+    "accent-alt": "#c4a060",
+    "border": "rgba(140, 130, 100, 0.20)",
+    "sidebar-bg": "rgba(240, 237, 228, 0.84)",
+    "card-bg": "rgba(248, 245, 238, 0.89)",
+    "input-bg": "rgba(248, 245, 238, 0.95)",
+    "selection-color": "#fff8e8"
+  }
+}

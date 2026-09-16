@@ -1,0 +1,27 @@
+{
+  "id": "cyberpunk-neon",
+  "name": "明雾机房",
+  "version": "4.0.0",
+  "description": "明亮克制的近未来工业机房：浅雾灰蓝、银白金属、磨砂玻璃与柔和日光，组件层级清晰但不使用霓虹与重暗色。",
+  "appearance": "light",
+  "background": {
+    "image": "background.png",
+    "focusX": 0.5,
+    "focusY": 0.5
+  },
+  "colors": {
+    "bg-primary": "#dce7ec",
+    "bg-secondary": "#eef4f6",
+    "bg-tertiary": "#f6fafb",
+    "text-primary": "#17232b",
+    "text-secondary": "#43545f",
+    "text-tertiary": "#6b7b85",
+    "accent": "#4f7d91",
+    "accent-alt": "#8a7a5c",
+    "border": "rgba(54, 78, 91, 0.20)",
+    "sidebar-bg": "rgba(232, 241, 244, 0.72)",
+    "card-bg": "rgba(248, 251, 252, 0.86)",
+    "input-bg": "rgba(245, 249, 250, 0.94)",
+    "selection-color": "#17232b"
+  }
+}

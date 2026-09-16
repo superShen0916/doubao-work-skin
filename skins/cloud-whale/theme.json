@@ -1,0 +1,27 @@
+{
+  "id": "cloud-whale",
+  "name": "浮鲸之境",
+  "version": "1.0.0",
+  "description": "珍珠白天空中浮游的小鲸，淡薰衣草与粉末蓝的梦幻治愈系。",
+  "appearance": "light",
+  "background": {
+    "image": "background.png",
+    "focusX": 0.5,
+    "focusY": 0.5
+  },
+  "colors": {
+    "bg-primary": "#e9eaf4",
+    "bg-secondary": "#eff0f8",
+    "bg-tertiary": "#f8f6fa",
+    "text-primary": "#343448",
+    "text-secondary": "#646478",
+    "text-tertiary": "#9494a8",
+    "accent": "#8898d0",
+    "accent-alt": "#d8a0b0",
+    "border": "rgba(110, 110, 150, 0.20)",
+    "sidebar-bg": "rgba(238, 238, 246, 0.84)",
+    "card-bg": "rgba(250, 248, 252, 0.89)",
+    "input-bg": "rgba(250, 248, 252, 0.95)",
+    "selection-color": "#f0e8ff"
+  }
+}
