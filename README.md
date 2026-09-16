@@ -8,9 +8,9 @@
 
 需要 **macOS 13.5 或更新版本**（Apple 芯片或 Intel），豆包工作安装在 `/Applications/DoubaoWork.app`。安装器会自动准备专用运行环境，无需预先安装 Node.js、Git 或 Homebrew。
 
-将本仓库链接发送给豆包工作，并描述需求，例如：
+将下面这段话发送给能够操作本机的豆包工作：
 
-> 请帮我安装这个皮肤工具，换成「晴窗猫咪」。
+> 请根据 https://github.com/superShen0916/doubao-work-skin 的 README 和 AGENTS.md，帮我安装并启用豆包工作皮肤，换成「晴窗猫咪」。已经安装就直接复用；如果需要重启，请告诉我操作步骤，应用后验证是否生效。
 
 项目提供 [Agent 操作指南](./AGENTS.md)，涵盖下载、安装、切换和验证。Agent 需要能够访问仓库并在你的 Mac 上执行命令；对话安装目前处于实验阶段，仍需在豆包工作中验证完整流程。首次启用可能需要按提示手动重启应用。
 
@@ -37,7 +37,7 @@
 
 ### 手动安装
 
-1. 下载脚本发布包或本仓库源码 ZIP，完整解压。
+1. 从 [GitHub Releases](https://github.com/superShen0916/doubao-work-skin/releases) 下载 `DoubaoWorkSkin-<版本>-macos-scripts.zip`，或下载本仓库源码 ZIP，完整解压。
 2. 双击 **`安装皮肤.command`**，等待安装完成。首次安装需要联网，安装过程不会退出豆包工作。
 3. 双击桌面“豆包工作皮肤”文件夹中的 **`启动豆包工作.command`**。需要重启时，先保存工作并等待当前 Agent 任务结束，再输入 `y` 确认。
 
@@ -47,9 +47,9 @@
 
 ### 可选：Skill
 
-支持导入本地 Skill 的客户端可使用完整的 `doubao-work-skin-<版本>-skill.zip`，其中包含操作说明、安装脚本和皮肤资源。Skill 不是安装前提，其导入与触发能力取决于客户端，目前尚待豆包工作实测。
+支持导入本地 Skill 的客户端可从 [GitHub Releases](https://github.com/superShen0916/doubao-work-skin/releases) 下载并导入完整的 `doubao-work-skin-<版本>-skill.zip`，其中包含操作说明、安装脚本和皮肤资源。Skill 不是安装前提，其导入与触发能力取决于客户端，目前尚待豆包工作实测。
 
-[Skill 源文件](./skills/doubao-work-skin/SKILL.md)用于维护；单独复制该目录不包含完整程序。打包方式见[发布指南](./RELEASING.md)。
+[Skill 源文件](./skills/doubao-work-skin/SKILL.md)用于维护；源码中的这个目录只有入口，`assets/project/` 在打包时自动加入 ZIP。不要把源码技能目录当成完整安装包：单独复制它仍需 Agent 联网下载程序。打包方式见[发布指南](./RELEASING.md)。
 
 ## 内置主题
 

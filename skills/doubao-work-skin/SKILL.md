@@ -7,16 +7,20 @@ description: 为 macOS 豆包工作安装和使用本地换肤工具，列出与
 
 操作用户本机的豆包工作。需要本机文件与命令执行权限；云端沙箱中的成功不代表用户电脑已生效。
 
-## 找到统一操作说明
+## 找到工具和操作说明
 
-按以下顺序定位，读取后按说明执行，不自行重写安装或注入逻辑：
+官方仓库：[superShen0916/doubao-work-skin](https://github.com/superShen0916/doubao-work-skin)。
 
-1. 已安装时，读取 `~/Library/Application Support/DoubaoWorkSkin/AGENTS.md`，使用同目录的 `skin` 命令。无需系统 Node.js。
-2. 未安装时，读取本技能目录下 [assets/project/AGENTS.md](assets/project/AGENTS.md)。完整发布技能包会携带该目录；以此为项目根目录运行 `/bin/zsh ./安装皮肤.command`，成功后转到已安装说明。
-3. 在源码仓库中使用本技能时，打包资源尚未生成，可读取相对此技能目录的 `../../AGENTS.md`，在对应项目根目录执行安装。
-4. 上述本地说明都不存在、但用户给出了 GitHub 项目链接时，读取该仓库根目录的 `AGENTS.md`，按“安装与环境准备”获取完整项目并安装。
+所有相对路径均以本 `SKILL.md` 所在目录为基准，不以 shell 当前目录为基准。先检查文件存在，再读取对应说明；选中一个可用入口后就按该说明执行，不重复安装或自行重写注入逻辑。
 
-只有本地说明和仓库链接都无法取得时，才请用户提供项目链接或完整项目。不要猜测 GitHub 仓库地址、下载未知安装器，或宣称安装成功。更新时仅在用户要求更新后运行新版资源中的安装脚本，个人皮肤保持在用户目录。
+1. **已安装工具**：检查 `~/Library/Application Support/DoubaoWorkSkin/AGENTS.md` 和同目录的 `skin`。两者都存在时读取指南，直接使用固定命令入口，无需系统 Node.js。只存在其中一个或命令失败时，先诊断具体问题，不把缺失或失败当成重装指令。
+2. **完整技能包**：未安装时，检查本技能目录的 `assets/project/AGENTS.md`。该路径仅由发布打包生成，源码中的技能目录没有它。存在时，以 `assets/project/` 为项目根目录，确认下述安装文件齐全后读取指南并安装。
+3. **完整源码仓库**：没有随包资源时，检查 `../../AGENTS.md` 及该目录的安装文件。仅当它确实是完整项目时，以 `../../` 为项目根目录读取指南并安装；不能仅凭同名 `AGENTS.md` 判断。单独复制本技能文件夹后，这个相对路径通常不可用。
+4. **从仓库获取**：没有可用本地项目时，访问上面的官方仓库，读取根目录 `AGENTS.md`，按“安装与环境准备”下载完整发布包或源码 ZIP。用户明确指定其他仓库、分支或版本时以其选择为准。不要猜下载文件 URL；访问失败时报告具体原因，再请用户提供完整下载包。
+
+完整项目应包含 `AGENTS.md`、`安装皮肤.command`、`scripts/install.mjs`、`scripts/installed-cli.mjs`、`skin.mjs`、`package.json`、`src/` 和 `skins/`。本地项目缺文件时说明资源不完整，不运行残缺安装器；可按第 4 项重新获取完整包。安装在选定项目根目录执行 `/bin/zsh ./安装皮肤.command`，成功后转到固定的已安装指南。
+
+导入技能时优先使用 [GitHub Releases](https://github.com/superShen0916/doubao-work-skin/releases) 中的 `doubao-work-skin-<版本>-skill.zip`，其中包含本文件和 `assets/project/`。源码技能目录只是入口，单独安装它仍需要联网获取程序。用户请求更新时，按所选版本的仓库指南获取新版；普通换肤复用已安装工具，保留个人皮肤。
 
 ## 执行用户请求
 
