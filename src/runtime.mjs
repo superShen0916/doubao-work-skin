@@ -175,10 +175,10 @@ function parseWatchCommand(command, { injectorPath, cwd }) {
     }
   }
   if (injectorIndex < 0) return null;
-  // 去除可执行文件路径首尾的引号（Windows 命令行中含空格路径会被引号包裹）
+  // 可执行文件路径：去除首尾引号（Windows 含空格路径会被引号包裹）
   const executable = source.slice(0, injectorIndex).trim().replace(/^["']|["']$/g, "");
-  const exeName = path.basename(executable);
-  if (!(exeName === "node" || exeName === "node.exe" || executable.endsWith("/node") || executable.endsWith("\\node"))) return null;
+  // 用正则匹配 node/node.exe，不依赖 path.basename（跨平台行为不一致）
+  if (!/[\\/]node(\.exe)?$/i.test(executable)) return null;
   const tokens = source.slice(injectorIndex + injectorToken.length).trim().split(/\s+/);
   const watchIndex = tokens.indexOf("--watch");
   const portIndex = tokens.indexOf("--port");
@@ -296,12 +296,14 @@ export async function findDoubaoWorkPid({ execFileImpl = null } = {}) {
   // 正常路径：通过 platform 层获取实际应用路径，按进程名查找
   const install = await discoverAppInstall().catch(() => null);
   const mainBinary = install?.mainBinary || DOUBAOWORK_BINARY;
-  const mainName = path.basename(mainBinary);
-  const rows = await listProcessesByName([mainName]).catch(() => []);
+  const mainName = path.basename(mainBinary).replace(/\.exe$/i, "");
+  const rows = await listProcessesByName([mainName, `${mainName}.exe`]).catch(() => []);
+  // 优先用 executablePath 精确匹配（不受命令行引号影响），其次用命令行匹配（去除开头引号）
+  const normalizedMain = path.resolve(mainBinary).toLowerCase();
   const match = rows.find((row) => {
-    const cmd = String(row.command || "");
-    // 精确匹配可执行文件路径，或命令行以该路径开头
-    return cmd === mainBinary || cmd.startsWith(`${mainBinary} `) || cmd.startsWith(mainBinary);
+    if (row.executablePath && path.resolve(row.executablePath).toLowerCase() === normalizedMain) return true;
+    const cmd = String(row.command || "").replace(/^"/, "");
+    return cmd === mainBinary || cmd.startsWith(`${mainBinary} `);
   });
   return match ? match.pid : null;
 }
@@ -381,11 +383,13 @@ export async function findDoubaoWorkBrowserPids({ execFileImpl = null } = {}) {
   // 正常路径：通过 platform 层获取实际应用路径
   const install = await discoverAppInstall().catch(() => null);
   const helperBinary = install?.helperBinary || DOUBAOWORK_BROWSER_BINARY;
-  const helperName = path.basename(helperBinary);
-  const rows = await listProcessesByName([helperName]).catch(() => []);
+  const helperName = path.basename(helperBinary).replace(/\.exe$/i, "");
+  const rows = await listProcessesByName([helperName, `${helperName}.exe`]).catch(() => []);
+  const normalizedHelper = path.resolve(helperBinary).toLowerCase();
   return rows
     .filter((row) => {
-      const command = row.command;
+      if (row.executablePath && path.resolve(row.executablePath).toLowerCase() === normalizedHelper) return true;
+      const command = String(row.command || "").replace(/^"/, "");
       return command === helperBinary || command.startsWith(`${helperBinary} `);
     })
     .map((row) => row.pid);

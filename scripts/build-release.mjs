@@ -49,8 +49,8 @@ async function buildPayload(targetDir, platform) {
 await fs.mkdir(dist, { recursive: true });
 const temp = await fs.mkdtemp(path.join(dist, ".release-"));
 try {
-  // macOS 发布包
-  const macPayload = path.join(temp, "豆包工作皮肤-mac");
+  // macOS 发布包（根目录保持 豆包工作皮肤/，与校验器一致）
+  const macPayload = path.join(temp, "豆包工作皮肤");
   await buildPayload(macPayload, "macos");
   const macZip = path.join(dist, `DoubaoWorkSkin-${pkg.version}-macos-scripts.zip`);
   await fs.rm(macZip, { force: true });

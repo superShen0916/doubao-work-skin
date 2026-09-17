@@ -72,21 +72,24 @@ async function discoverFromRunningProcess() {
     const script = `
       Get-CimInstance Win32_Process | Where-Object {
         $_.Name -match 'Doubao|DoubaoWork' -and $_.ExecutablePath
-      } | Select-Object -First 5 ProcessId, Name, ExecutablePath, CommandLine | ConvertTo-Json -Compress
+      } | Select-Object -First 10 ProcessId, Name, ExecutablePath, CommandLine | ConvertTo-Json -Compress
     `;
     const result = parsePowerShellJson(await runPowerShell(script));
     if (!result) return null;
     const processes = Array.isArray(result) ? result : [result];
-    // 优先找主进程（不是 Helper/Renderer），且可执行文件名精确匹配 DoubaoWork.exe
-    const main = processes.find((p) => /[\\/]DoubaoWork\.exe$/i.test(p.ExecutablePath) && !/helper|renderer/i.test(p.CommandLine || ""));
-    const target = main || processes[0];
-    if (!target?.ExecutablePath) return null;
+    // 只接受可执行文件名为 DoubaoWork.exe 的主进程，不匹配 Helper/Renderer
+    // 不回退到 processes[0]，避免把普通 Doubao.exe 或其他同前缀程序当作豆包工作
+    const main = processes.find((p) =>
+      /[\\/]DoubaoWork\.exe$/i.test(p.ExecutablePath) &&
+      !/helper|renderer|gpu-process|utility/i.test(p.CommandLine || "")
+    );
+    if (!main) return null;
     // 根据路径判断安装类型：WindowsApps 目录下的是 Store 版
-    const isStore = /[\\/]WindowsApps[\\/]/i.test(target.ExecutablePath);
+    const isStore = /[\\/]WindowsApps[\\/]/i.test(main.ExecutablePath);
     return {
       type: isStore ? "store" : "desktop",
-      mainBinary: target.ExecutablePath,
-      helperBinary: path.join(path.dirname(target.ExecutablePath), "DoubaoWork Browser.exe"),
+      mainBinary: main.ExecutablePath,
+      helperBinary: path.join(path.dirname(main.ExecutablePath), "DoubaoWork Browser.exe"),
       version: null,
     };
   } catch {
@@ -286,7 +289,11 @@ export async function listProcessesByName(exeNames) {
     const result = parsePowerShellJson(await runPowerShell(script));
     if (!result) return [];
     const rows = Array.isArray(result) ? result : [result];
-    return rows.map((r) => ({ pid: Number(r.ProcessId), command: r.CommandLine || r.ExecutablePath || "" }));
+    return rows.map((r) => ({
+      pid: Number(r.ProcessId),
+      command: r.CommandLine || r.ExecutablePath || "",
+      executablePath: r.ExecutablePath || null,
+    }));
   } catch {
     return [];
   }
@@ -319,16 +326,17 @@ export function shellQuote(value) {
 }
 
 export function generateCliEntry(dataRoot, nodePath, bridgePath) {
-  // Windows .cmd wrapper
-  return `@echo off\r\nset NODE_OPTIONS=\r\nset NODE_PATH=\r\nset DWS_STATE_ROOT=${dataRoot}\r\n"${nodePath}" "${bridgePath}" %*\r\n`;
+  // Windows .cmd wrapper，加 chcp 65001 确保中文路径正确解析
+  return `@echo off\r\nchcp 65001 >nul\r\nsetlocal\r\nset NODE_OPTIONS=\r\nset NODE_PATH=\r\nset DWS_STATE_ROOT=${dataRoot}\r\n"${nodePath}" "${bridgePath}" %*\r\n`;
 }
 
 export function launcherScripts(command) {
   const cmd = `call "${command}"`;
+  const header = "@echo off\r\nchcp 65001 >nul\r\nsetlocal\r\nset NODE_OPTIONS=\r\nset NODE_PATH=\r\n";
   return {
-    "启动豆包工作.cmd": `@echo off\r\nsetlocal\r\nset NODE_OPTIONS=\r\nset NODE_PATH=\r\n${cmd} start\r\nif %errorlevel% neq 2 exit /b %errorlevel%\r\necho.\r\necho 需要重启豆包工作。请保存工作，并等待 Agent 当前任务结束。\r\nset /p answer=确认已保存并重启？输入 y 后回车，其他输入取消：\r\nif /i not "%answer%"=="y" (\r\n  echo 已取消，豆包工作保持打开。\r\n  exit /b 2\r\n)\r\n${cmd} start --force\r\nexit /b %errorlevel%\r\n`,
-    "恢复官方外观.cmd": `@echo off\r\nsetlocal\r\nset NODE_OPTIONS=\r\nset NODE_PATH=\r\n${cmd} disable\r\n`,
-    "复制换肤提示词.cmd": `@echo off\r\nsetlocal\r\nset NODE_OPTIONS=\r\nset NODE_PATH=\r\nfor /f "delims=" %%i in ('${cmd} prompt') do set "PROMPT_TEXT=%%i"\r\necho %PROMPT_TEXT% | clip\r\necho 已复制，粘贴到豆包工作对话即可。\r\n`,
+    "启动豆包工作.cmd": `${header}${cmd} start\r\nif %errorlevel% neq 2 exit /b %errorlevel%\r\necho.\r\necho 需要重启豆包工作。请保存工作，并等待 Agent 当前任务结束。\r\nset /p answer=确认已保存并重启？输入 y 后回车，其他输入取消：\r\nif /i not "%answer%"=="y" (\r\n  echo 已取消，豆包工作保持打开。\r\n  exit /b 2\r\n)\r\n${cmd} start --force\r\nexit /b %errorlevel%\r\n`,
+    "恢复官方外观.cmd": `${header}${cmd} disable\r\n`,
+    "复制换肤提示词.cmd": `${header}for /f "delims=" %%i in ('${cmd} prompt') do set "PROMPT_TEXT=%%i"\r\necho %PROMPT_TEXT% | clip\r\necho 已复制，粘贴到豆包工作对话即可。\r\n`,
   };
 }
 

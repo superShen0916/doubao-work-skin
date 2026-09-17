@@ -52,8 +52,12 @@ test("脚本安装升级程序但保留个人皮肤、偏好和固定桌面入�
     assert.equal(await fs.readFile(path.join(first.engine, "skin.mjs"), "utf8"), "new version");
     assert.equal(await fs.readFile(path.join(first.skinsDir, "sample/theme.json"), "utf8"), "my changes");
     assert.equal(await fs.readFile(path.join(options.dataRoot, "preferences.json"), "utf8"), '{"lastTheme":"sample"}');
-    assert.equal(await fs.readlink(path.join(options.desktopDir, "豆包工作皮肤")), first.shortcuts);
-    assert.equal((await fs.stat(path.join(first.shortcuts, "启动豆包工作.command"))).mode & 0o777, 0o700);
+    if (process.platform === "darwin") {
+      assert.equal(await fs.readlink(path.join(options.desktopDir, "豆包工作皮肤")), first.shortcuts);
+      assert.equal((await fs.stat(path.join(first.shortcuts, "启动豆包工作.command"))).mode & 0o777, 0o700);
+    } else if (process.platform === "win32") {
+      assert.ok(await fs.stat(path.join(first.shortcuts, "启动豆包工作.cmd")));
+    }
     assert.ok(!(await fs.readdir(options.dataRoot)).some(name => name.startsWith(".engine-") || name === ".install-lock"));
   });
 });
@@ -121,12 +125,22 @@ test("桌面存在同名文件时保留原文件；未知引擎目录不覆盖",
 
 test("非交互调用启动入口时不会自动强制重启宿主应用", async () => {
   await fixture(async options => {
-    const command = path.join(options.projectRoot, "fake-cli");
+    const isWin = process.platform === "win32";
+    const command = path.join(options.projectRoot, isWin ? "fake-cli.cmd" : "fake-cli");
     const calls = path.join(options.projectRoot, "calls");
-    await fs.writeFile(command, '#!/bin/sh\nprintf "%s\\n" "$*" >> "$DWS_TEST_CALLS"\nexit 2\n', { mode: 0o700 });
-    const launcher = path.join(options.projectRoot, "launch.command");
-    await fs.writeFile(launcher, launcherScripts(command)["启动豆包工作.command"], { mode: 0o700 });
-    await assert.rejects(exec("/bin/zsh", [launcher], { env: { ...process.env, DWS_TEST_CALLS: calls } }), error => error.code === 2);
+    if (isWin) {
+      await fs.writeFile(command, `@echo off\r\necho %* >> "%DWS_TEST_CALLS%"\r\nexit /b 2\r\n`);
+    } else {
+      await fs.writeFile(command, '#!/bin/sh\nprintf "%s\\n" "$*" >> "$DWS_TEST_CALLS"\nexit 2\n', { mode: 0o700 });
+    }
+    const launcherName = isWin ? "启动豆包工作.cmd" : "启动豆包工作.command";
+    const launcher = path.join(options.projectRoot, launcherName);
+    await fs.writeFile(launcher, launcherScripts(command)[launcherName], { mode: 0o700 });
+    if (isWin) {
+      await assert.rejects(exec("cmd.exe", ["/c", launcher], { env: { ...process.env, DWS_TEST_CALLS: calls } }), error => error.code === 2);
+    } else {
+      await assert.rejects(exec("/bin/zsh", [launcher], { env: { ...process.env, DWS_TEST_CALLS: calls } }), error => error.code === 2);
+    }
     assert.equal(await fs.readFile(calls, "utf8"), "start\n");
   });
 });

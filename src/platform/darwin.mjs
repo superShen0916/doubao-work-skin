@@ -88,20 +88,30 @@ export async function inspectProcess(pid) {
 }
 
 export async function listProcessesByName(exeNames) {
-  const { stdout } = await execFileAsync("ps", ["-axo", "pid=,command="], { encoding: "utf8", maxBuffer: 4 * 1024 * 1024 });
-  // 不按空格拆分命令行（路径可能含空格，如 Application Support）。
-  // 用正则匹配可执行文件名作为路径的最后一段，避免误匹配命令行参数。
+  // 先用 comm 获取进程名（不受路径空格影响），再获取完整命令行
+  const { stdout: commOut } = await execFileAsync("ps", ["-axo", "pid=,comm="], { encoding: "utf8", maxBuffer: 4 * 1024 * 1024 });
   const namePatterns = exeNames.map((name) => {
-    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    return new RegExp(`(?:^|\\s|/|\\\\)${escaped}(?:\\s|$)`, "i");
+    const base = name.replace(/\.exe$/i, "");
+    const escaped = base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`^${escaped}(\\.exe)?$`, "i");
   });
-  return stdout.split("\n").map((line) => {
+  const matchingPids = commOut.split("\n").map((line) => {
     const match = line.match(/^\s*(\d+)\s+(.*)$/);
-    return match ? { pid: Number(match[1]), command: match[2] } : null;
+    return match ? { pid: Number(match[1]), comm: match[2].trim() } : null;
   }).filter((entry) => {
     if (!entry) return false;
-    return namePatterns.some((re) => re.test(entry.command));
-  });
+    return namePatterns.some((re) => re.test(entry.comm));
+  }).map((e) => e.pid);
+
+  // 对匹配的 PID 获取完整命令行和可执行文件路径
+  const result = [];
+  for (const pid of matchingPids) {
+    try {
+      const { stdout } = await execFileAsync("ps", ["-p", String(pid), "-o", "command="], { encoding: "utf8" });
+      result.push({ pid, command: stdout.trim(), executablePath: null });
+    } catch { /* 进程已退出 */ }
+  }
+  return result;
 }
 
 export async function isProcessAlive(pid) {

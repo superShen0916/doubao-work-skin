@@ -7,7 +7,22 @@ import { pathToFileURL } from "node:url";
 import { execFile } from "node:child_process";
 import { buildThemeCss, discoverThemes, loadTheme } from "../src/theme.mjs";
 
-const browser = process.env.DWS_TEST_BROWSER || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+const browser = process.env.DWS_TEST_BROWSER || (
+  process.platform === "darwin"
+    ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+    : process.platform === "win32"
+    ? "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+    : "google-chrome"
+);
+
+async function browserExists() {
+  try {
+    await fs.access(browser);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function runBrowser(args, screenshot) {
   return new Promise((resolve, reject) => {
@@ -78,10 +93,9 @@ function checkStyles(themes) {
 }
 
 test("浏览器验证全部主题：装饰层隔离、运行状态条与嵌套菜单", async t => {
-  try { await fs.access(browser, fs.constants.X_OK); }
-  catch (error) {
-    if (process.env.DWS_TEST_BROWSER || process.env.CI) throw error;
-    t.skip("未安装 Chrome；可通过 DWS_TEST_BROWSER 指定 Chromium 可执行文件");
+  if (!(await browserExists())) {
+    if (process.env.DWS_TEST_BROWSER) throw new Error(`指定的浏览器不存在: ${browser}`);
+    t.skip(`未安装 Chrome（${browser}）；可通过 DWS_TEST_BROWSER 指定 Chromium 可执行文件`);
     return;
   }
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "dws-css-browser-"));
