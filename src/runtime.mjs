@@ -302,12 +302,14 @@ export async function selectAvailablePort(preferred, {
     socket.once("error", () => finish(false));
   }),
 } = {}) {
-  positiveInteger(preferred, "port");
+  preferred = positiveInteger(preferred, "port");
+  if (preferred > 65535) throw new Error("port 必须是 1 到 65535 的整数");
   if (!await isPortListening(preferred)) return preferred;
-  for (let offset = 1; offset <= 5; offset++) {
+  const lastPort = Math.min(preferred + 5, 65535);
+  for (let offset = 1; preferred + offset <= lastPort; offset++) {
     if (!await isPortListening(preferred + offset)) return preferred + offset;
   }
-  throw new Error(`端口 ${preferred}-${preferred + 5} 均不可用`);
+  throw new Error(`端口 ${preferred}-${lastPort} 均不可用`);
 }
 
 export async function launchDoubaoWork({

@@ -2,8 +2,10 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
+import pkg from "../package.json" with { type: "json" };
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+export const SKIN_VERSION = pkg.version;
 export const PROJECT_ROOT = path.resolve(HERE, "..");
 export const DEFAULT_SKINS_DIR = process.env.DWS_SKINS_DIR || path.join(PROJECT_ROOT, "skins");
 export const BASE_CSS_PATH = path.join(HERE, "base.css");
@@ -132,7 +134,7 @@ export async function discoverThemes({ skinsDir = DEFAULT_SKINS_DIR } = {}) {
   return result;
 }
 
-export function buildVariableCss(theme, backgroundDataUrl, skinVersion = "2.1.0") {
+export function buildVariableCss(theme, backgroundDataUrl, skinVersion = SKIN_VERSION) {
   const colors = theme.colors;
   const variables = {
     "--dws-bg": colors["bg-primary"],
@@ -169,7 +171,7 @@ ${variableLines}
 `;
 }
 
-export function buildThemeCss(themePackage, { skinVersion = "2.1.0" } = {}) {
+export function buildThemeCss(themePackage, { skinVersion = SKIN_VERSION } = {}) {
   const prefix = buildVariableCss(themePackage.theme, themePackage.backgroundDataUrl, skinVersion);
   let css = `${prefix}\n/* === 皮肤精确选择器 CSS === */\n${themePackage.baseCss}\n`;
   if (themePackage.skinCss) css += `\n/* === 主题专属 CSS === */\n${themePackage.skinCss}\n`;

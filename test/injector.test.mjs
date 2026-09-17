@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
+import pkg from "../package.json" with { type: "json" };
 import { injectToSession, restoreSession, runOnce, runVerify, verifySession } from "../src/injector.mjs";
 
 const skin = { theme: { id: "sample", name: "Sample", appearance: "light", colors: { accent: "#123456" } }, baseCss: "", skinCss: "" };
@@ -43,10 +44,22 @@ test("有效豆包工作聊天页正常注入、校验并恢复", async () => {
   const result = await verifySession(p.session);
   assert.equal(result.isAppPage, true);
   assert.equal(result.markerTheme, "sample");
+  assert.equal(result.markerVersion, pkg.version);
   await restoreSession(p.session);
   assert.equal(p.nodes.size, 0);
   assert.equal(p.attributes.get("data-theme"), "dark");
   assert.deepEqual(Object.keys(p.context.window), []);
+});
+
+test("重新注入时同步旧标记版本并保留原生外观用于恢复", async () => {
+  const p = page();
+  await injectToSession(p.session, skin);
+  p.context.window.__DOUBAO_WORK_SKIN_ACTIVE__.version = "old-version";
+  await injectToSession(p.session, skin);
+  assert.equal((await verifySession(p.session)).markerVersion, pkg.version);
+  await restoreSession(p.session);
+  assert.equal(p.attributes.get("data-theme"), "dark");
+  assert.equal(p.context.document.body.style.background, "black");
 });
 
 test("普通网页、内嵌 iframe 和缺少布局的页面不写入样式或全局变量", async () => {

@@ -17,9 +17,8 @@
 import { watch as watchFs } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { buildThemeCss, loadTheme } from "./theme.mjs";
+import { buildThemeCss, loadTheme, SKIN_VERSION } from "./theme.mjs";
 import { CdpSession, connectAllPages, isDoubaoWorkPage, isInspectablePageTarget, listPageTargets } from "./cdp.mjs";
-const SKIN_VERSION = "2.1.0";
 
 // 注入的节点 ID（用于识别和清理）
 const STYLE_NODE_ID = "doubao-work-skin-style";
@@ -74,6 +73,7 @@ function pageBootstrapScript() {
 
   function applySkin(config) {
     if (!config) return;
+    window.${MARKER_GLOBAL}.version = "${SKIN_VERSION}";
     // 1. 创建/更新 style 节点（挂在 head）
     let style = document.getElementById("${STYLE_NODE_ID}");
     if (!style) {

@@ -154,6 +154,13 @@ test("CSS 组装顺序为变量、公共 CSS、可选主题 CSS", () => {
   assert.ok(css.indexOf("BASE-CSS") < css.indexOf("SKIN-CSS"));
 });
 
+test("生成 CSS 的默认版本跟随 package.json，保留显式版本覆盖", async () => {
+  const pkg = JSON.parse(await fs.readFile(path.join(ROOT, "package.json"), "utf8"));
+  const themePackage = { theme: fixtureTheme(), baseCss: "", skinCss: "" };
+  assert.ok(buildThemeCss(themePackage).includes(`换肤 v${pkg.version}`));
+  assert.ok(buildThemeCss(themePackage, { skinVersion: "test-version" }).includes("换肤 vtest-version"));
+});
+
 test("base.css 与字节级摘要一致", async () => {
   const { createHash } = await import("node:crypto");
   const baseline = JSON.parse(await fs.readFile(BASELINE_PATH, "utf8"));
