@@ -188,6 +188,33 @@
   background: color-mix(in srgb, var(--dws-accent) 9%, transparent) !important;
 }
 
+/* 发送按钮：适配主题强调色，覆盖原生深灰背景 */
+body [data-testid="chat_input"] [data-testid="chat_input_send_button"] {
+  background: var(--dws-accent) !important;
+  color: #fff !important;
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--dws-accent) 32%, transparent) !important;
+  transition: background .2s ease, box-shadow .2s ease, transform .12s ease !important;
+}
+body [data-testid="chat_input"] [data-testid="chat_input_send_button"]:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--dws-accent) 86%, black) !important;
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--dws-accent) 42%, transparent) !important;
+}
+body [data-testid="chat_input"] [data-testid="chat_input_send_button"]:active:not(:disabled) {
+  background: color-mix(in srgb, var(--dws-accent) 72%, black) !important;
+  transform: scale(0.94) !important;
+  box-shadow: 0 1px 6px color-mix(in srgb, var(--dws-accent) 28%, transparent) !important;
+}
+body [data-testid="chat_input"] [data-testid="chat_input_send_button"]:disabled {
+  background: color-mix(in srgb, var(--dws-accent) 18%, transparent) !important;
+  color: var(--dws-text-subtle) !important;
+  box-shadow: none !important;
+  cursor: not-allowed !important;
+}
+body [data-testid="chat_input"] [data-testid="chat_input_send_button"] svg {
+  color: inherit !important;
+  fill: currentColor !important;
+}
+
 /* === 7. Code and quote surfaces === */
 [data-testid="message_text_content"] pre {
   background: color-mix(in srgb, var(--dws-panel-alt) 100%, transparent) !important;

@@ -2,11 +2,11 @@
   "schema": "doubao-work-skin-selectors/2",
   "description": "豆包工作选择器契约（2.28.12 实测）。仅使用稳定 data-testid、role 和最小稳定类名；禁止纯 nth-child 路径和 hash 类名。",
   "verifiedAgainst": {
-    "date": "2026-09-16",
+    "date": "2026-09-17",
     "doubaoWorkVersions": [
       "2.28.12"
     ],
-    "note": "基于页面 CDP 端口 9342 实测 DOM 快照、布局检查和截图回归。2026-09-16 新增对话摘要面板（fixedPanel）选择器实测。"
+    "note": "基于页面 CDP 端口 9342 实测 DOM 快照、布局检查和截图回归。2026-09-16 新增对话摘要面板（fixedPanel）选择器实测。2026-09-17 新增发送按钮（chat_input_send_button）选择器实测，原生深灰背景 rgb(38,38,38)，启用态类名含 !bg-g-send-msg-btn-bg。"
   },
   "appearanceSignal": {
     "root": "html",
@@ -192,6 +192,14 @@
       "notes": "实际输入编辑器。"
     },
     {
+      "key": "chat-input-send-button",
+      "selector": "[data-testid=\"chat_input_send_button\"]",
+      "tier": "L2",
+      "scope": "workspace",
+      "required": false,
+      "notes": "2026-09-17 CDP 实测：输入框右下角发送按钮，原生深灰背景 rgb(38,38,38)；启用态类名含 !bg-g-send-msg-btn-bg，禁用态含 !bg-g-send-msg-btn-disabled-bg 且尺寸收为 0。"
+    },
+    {
       "key": "right-panel",
       "selector": "[data-testid=\"right-panel-container\"]",
       "tier": "L1",
@@ -313,6 +321,7 @@
     "message_action_bar",
     "chat_input",
     "chat_input_input",
+    "chat_input_send_button",
     "right-panel-container",
     "samantha_layout_right_side",
     "queue-message-list",

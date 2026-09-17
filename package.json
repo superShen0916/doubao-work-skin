@@ -1,6 +1,6 @@
 {
   "name": "doubao-work-skin",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "豆包工作 macOS 桌面端皮肤系统：本地 CDP 注入、可扩展主题、自动恢复与一键还原",
   "type": "module",
   "main": "skin.mjs",

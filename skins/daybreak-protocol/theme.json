@@ -1,7 +1,7 @@
 {
   "id": "daybreak-protocol",
   "name": "昼光协议",
-  "version": "1.0.0",
+  "version": "2.2.0",
   "description": "银白未来都市与高空日光构成的清透工作界面，以冷青导光、结构玻璃和低对比阅读层区分导航、内容与控制区域。",
   "appearance": "light",
   "background": {
