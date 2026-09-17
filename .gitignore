@@ -24,3 +24,4 @@ node_modules/
 # macOS release artifacts and verified runtime downloads
 /dist/
 /.build/
+/.doc-build/

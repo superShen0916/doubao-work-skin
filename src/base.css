@@ -261,6 +261,13 @@ body [data-testid="chat_input"] [data-testid="chat_input_send_button"] svg {
 [role="menu"] svg, [role="dialog"] svg {
   color: var(--dws-text-muted) !important;
 }
+/* backdrop-filter 会为固定定位子菜单建立包含块，
+   导致子菜单（如推理强度低/中/高）被父菜单 overflow-x:hidden 裁剪。
+   菜单使用接近不透明的背景，不叠加毛玻璃。 */
+[role="menu"] {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
 
 /* === 9. Scrollbar & selection === */
 ::selection {
@@ -511,8 +518,9 @@ body:not(:has([data-testid="chat-route-layout"])) [role="tab"][aria-selected="tr
 }
 
 /* === 13. 任务进行中状态条（输入框上方 pending/generating 栏） === */
-/* 状态条是输入框父容器的子元素，flex-col-reverse 使其显示在输入框上方 */
-div[class*="flex-col-reverse"][class*="input-guidance"] > *:not([data-testid="chat_input"]) {
+/* 状态条是输入框父容器的子元素，flex-col-reverse 使其显示在输入框上方。
+   排除 z-[-1] 装饰层（输入框顶部的 2px 原生光晕/阴影层），避免被误加背景边框。 */
+div[class*="flex-col-reverse"][class*="input-guidance"] > *:not([data-testid="chat_input"]):not([class~="z-[-1]"]) {
   background: color-mix(in srgb, var(--dws-input) 96%, transparent) !important;
   border: 1px solid color-mix(in srgb, var(--dws-accent) 20%, transparent) !important;
   border-radius: 16px !important;
@@ -521,48 +529,49 @@ div[class*="flex-col-reverse"][class*="input-guidance"] > *:not([data-testid="ch
   -webkit-backdrop-filter: blur(18px) saturate(110%) !important;
   box-shadow: 0 8px 32px rgba(0,0,0,.28) !important;
 }
-div[class*="flex-col-reverse"][class*="input-guidance"] > *:not([data-testid="chat_input"]) * {
+div[class*="flex-col-reverse"][class*="input-guidance"] > *:not([data-testid="chat_input"]):not([class~="z-[-1]"]) * {
   color: var(--dws-text) !important;
   fill: currentColor !important;
 }
-div[class*="flex-col-reverse"][class*="input-guidance"] > *:not([data-testid="chat_input"]) svg {
+div[class*="flex-col-reverse"][class*="input-guidance"] > *:not([data-testid="chat_input"]):not([class~="z-[-1]"]) svg {
   color: var(--dws-text-muted) !important;
   fill: currentColor !important;
 }
-div[class*="flex-col-reverse"][class*="input-guidance"] > *:not([data-testid="chat_input"]) button {
+div[class*="flex-col-reverse"][class*="input-guidance"] > *:not([data-testid="chat_input"]):not([class~="z-[-1]"]) button {
   background: color-mix(in srgb, var(--dws-accent) 14%, transparent) !important;
   color: var(--dws-text) !important;
   border-radius: 8px !important;
   transition: background .2s ease !important;
 }
-div[class*="flex-col-reverse"][class*="input-guidance"] > *:not([data-testid="chat_input"]) button:hover {
+div[class*="flex-col-reverse"][class*="input-guidance"] > *:not([data-testid="chat_input"]):not([class~="z-[-1]"]) button:hover {
   background: color-mix(in srgb, var(--dws-accent) 24%, transparent) !important;
 }
-/* 兜底：chat_input 的通用兄弟元素 */
-[data-testid="chat_input"] ~ :not([data-testid="chat_input"]) {
+/* 兜底：chat_input 的通用兄弟元素，排除 z-[-1] 装饰层 */
+[data-testid="chat_input"] ~ :not([data-testid="chat_input"]):not([class~="z-[-1]"]) {
   background: color-mix(in srgb, var(--dws-input) 96%, transparent) !important;
   color: var(--dws-text) !important;
 }
-[data-testid="chat_input"] ~ :not([data-testid="chat_input"]) * {
+[data-testid="chat_input"] ~ :not([data-testid="chat_input"]):not([class~="z-[-1]"]) * {
   color: var(--dws-text) !important;
 }
 
 /* === 8. 输入器运行时提示条（AI 生成中动态插入的横幅） === */
-/* flex-col-reverse 容器中 chat_input 之后的兄弟元素（显示在输入框上方） */
-[data-testid="chat_input"] ~ * {
+/* flex-col-reverse 容器中 chat_input 之后的兄弟元素（显示在输入框上方）。
+   排除 z-[-1] 装饰层，避免输入框顶部出现多余的线。 */
+[data-testid="chat_input"] ~ *:not([class~="z-[-1]"]) {
   background: var(--dws-panel) !important;
   color: var(--dws-text) !important;
   border-color: var(--dws-line) !important;
   border-radius: 12px !important;
 }
-[data-testid="chat_input"] ~ * button,
-[data-testid="chat_input"] ~ * [role="button"],
-[data-testid="chat_input"] ~ * svg {
+[data-testid="chat_input"] ~ *:not([class~="z-[-1]"]) button,
+[data-testid="chat_input"] ~ *:not([class~="z-[-1]"]) [role="button"],
+[data-testid="chat_input"] ~ *:not([class~="z-[-1]"]) svg {
   color: var(--dws-text-muted) !important;
   fill: currentColor !important;
 }
-[data-testid="chat_input"] ~ * button:hover,
-[data-testid="chat_input"] ~ * [role="button"]:hover {
+[data-testid="chat_input"] ~ *:not([class~="z-[-1]"]) button:hover,
+[data-testid="chat_input"] ~ *:not([class~="z-[-1]"]) [role="button"]:hover {
   color: var(--dws-text) !important;
   background: color-mix(in srgb, var(--dws-accent) 10%, transparent) !important;
 }

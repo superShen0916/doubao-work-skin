@@ -141,6 +141,18 @@ test("端口选择跳过已占用端口", async () => {
   assert.equal(await selectAvailablePort(9342, { isPortListening: async (port) => occupied.has(port) }), 9344);
 });
 
+test("端口回退不越过 65535，非法首选端口不发起探测", async () => {
+  const probed = [];
+  await assert.rejects(selectAvailablePort(65534, {
+    isPortListening: async port => { probed.push(port); return true; },
+  }), /65534-65535 均不可用/);
+  assert.deepEqual(probed, [65534, 65535]);
+  await assert.rejects(selectAvailablePort(65536, {
+    isPortListening: async () => assert.fail("不应探测非法端口"),
+  }), /1 到 65535/);
+  assert.equal(await selectAvailablePort("65535", { isPortListening: async () => false }), 65535);
+});
+
 test("只识别独立浏览器主进程，不匹配 helper 和 shell 命令", async () => {
   const binary = DOUBAOWORK_BROWSER_BINARY;
   const pids = await findDoubaoWorkBrowserPids({ execFileImpl: async () => ({ stdout: [

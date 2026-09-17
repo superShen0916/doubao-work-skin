@@ -168,7 +168,7 @@
     inset 0 1px rgba(255,255,255,.78) !important;
 }
 
-div[class*="flex-col-reverse"][class*="input-guidance"] > *:not([data-testid="chat_input"]),
+div[class*="flex-col-reverse"][class*="input-guidance"] > *:not([data-testid="chat_input"]):not([class~="z-[-1]"]),
 #chat-route-main :has(> [data-testid="queue-message-list"]) {
   color: #20303a !important;
   background: rgba(247, 251, 252, .94) !important;
@@ -231,8 +231,6 @@ div[class*="flex-col-reverse"][class*="input-guidance"] > *:not([data-testid="ch
   border: 1px solid rgba(61, 84, 96, .18) !important;
   border-radius: 11px !important;
   box-shadow: 0 24px 56px rgba(47, 70, 80, .20), inset 0 1px rgba(255,255,255,.72) !important;
-  backdrop-filter: blur(18px) saturate(94%) !important;
-  -webkit-backdrop-filter: blur(18px) saturate(94%) !important;
 }
 
 [role="menu"] [data-highlighted],

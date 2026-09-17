@@ -11,7 +11,11 @@ npm run check
 npm test
 ```
 
-以上命令可离线运行，不会启动、退出或修改豆包工作。CI 在 macOS 上分别使用 Node.js 22 和 24 执行检查；真实应用的视觉兼容性仍需手动验证。
+以上命令可离线运行，不会启动、退出或修改豆包工作。CI 在 macOS 上分别使用 Node.js 22 和 24 执行检查；合成页面测试不能替代真实应用的视觉兼容性验证。
+
+样式回归测试使用本机 Chrome 和独立的临时 profile，覆盖所有内置主题的输入框装饰层、运行状态条及嵌套子菜单。可用 `DWS_TEST_BROWSER` 指定 Chromium 可执行文件；本地没有 Chrome 时明确跳过此项，CI 缺少浏览器时失败。设置 `DWS_TEST_ARTIFACTS=.build/css-browser` 可保留合成测试页和截图。
+
+旧主题兼容在 `src/theme-compat.mjs` 和 CSS 组装阶段完成，不改写个人文件。浏览器测试同时覆盖旧规则、自定义颜色与圆角、弹窗毛玻璃；安装测试在临时目录验证重复升级后个人文件及偏好保持不变。新增兼容规则应继续遵守这一边界。
 
 共享样式 `src/base.css` 有字节级回归检查。主动修改该文件后，应先审阅样式差异并验证界面，再同步 `test/fixtures/final-css-sha256.json` 中的 SHA-256 和 UTF-8 解码后字符串长度（JavaScript `String.length`）；不要只为消除测试失败而更新摘要。
 

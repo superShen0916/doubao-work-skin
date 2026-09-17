@@ -175,7 +175,7 @@
     0 16px 42px rgba(0, 0, 0, .16) !important;
 }
 
-div[class*="flex-col-reverse"][class*="input-guidance"] > *:not([data-testid="chat_input"]),
+div[class*="flex-col-reverse"][class*="input-guidance"] > *:not([data-testid="chat_input"]):not([class~="z-[-1]"]),
 #chat-route-main :has(> [data-testid="queue-message-list"]) {
   color: #2e3440 !important;
   background: rgba(246, 244, 250, .95) !important;
@@ -230,8 +230,6 @@ div[class*="flex-col-reverse"][class*="input-guidance"] > *:not([data-testid="ch
   background: rgba(246, 244, 250, .97) !important;
   border: 1px solid rgba(106, 176, 208, .20) !important;
   box-shadow: 0 26px 64px rgba(0, 0, 0, .18), inset 0 1px rgba(255, 255, 255, .78) !important;
-  backdrop-filter: blur(23px) saturate(108%) !important;
-  -webkit-backdrop-filter: blur(23px) saturate(108%) !important;
 }
 
 [role="menu"] [data-highlighted],

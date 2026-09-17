@@ -1,0 +1,74 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: macos-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: node scripts/verify-release.mjs --tag-only "$GITHUB_REF_NAME"
+      - run: npm run check
+      - run: npm test
+      - run: git diff --exit-code
+
+  publish:
+    needs: check
+    runs-on: macos-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm run build:release
+      - run: node scripts/verify-release.mjs --tag "$GITHUB_REF_NAME"
+      - name: Upload and verify draft, then publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          version="${tag#v}"
+          if gh release view "$tag" --json isDraft > "$RUNNER_TEMP/release.json"; then
+            node -e 'if (!JSON.parse(require("fs").readFileSync(process.argv[1])).isDraft) throw new Error("已发布版本不可覆盖，请使用新版本号")' "$RUNNER_TEMP/release.json"
+          else
+            gh release create "$tag" --verify-tag --draft --title "$tag · 豆包工作皮肤" --notes-file "docs/releases/$tag.md"
+          fi
+          gh release upload "$tag" \
+            "dist/DoubaoWorkSkin-$version-macos-scripts.zip" \
+            "dist/DoubaoWorkSkin-$version-macos-scripts.zip.sha256" \
+            "dist/doubao-work-skin-$version-skill.zip" \
+            "dist/doubao-work-skin-$version-skill.zip.sha256" --clobber
+          download_dir="$RUNNER_TEMP/release-$GITHUB_RUN_ID"
+          mkdir -p "$download_dir"
+          gh release download "$tag" --dir "$download_dir" --clobber
+          (
+            cd "$download_dir"
+            shasum -a 256 -c ./*.zip.sha256
+          )
+          for file in "DoubaoWorkSkin-$version-macos-scripts.zip" "doubao-work-skin-$version-skill.zip"; do
+            cmp "dist/$file.sha256" "$download_dir/$file.sha256"
+          done
+          gh release edit "$tag" --draft=false --latest --notes-file "docs/releases/$tag.md"
