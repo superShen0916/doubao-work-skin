@@ -21,16 +21,18 @@ const POWERSHELL = "powershell.exe";
 const PS_ARGS = ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command"];
 
 async function runPowerShell(script, { timeout = 10_000 } = {}) {
-  const { stdout, stderr } = await execFileAsync(POWERSHELL, [...PS_ARGS, script], {
+  // 设置输出编码为 UTF-8，确保中文路径和输出正确解码
+  const wrapped = `
+    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+    $OutputEncoding = [System.Text.Encoding]::UTF8
+    ${script}
+  `;
+  const { stdout, stderr } = await execFileAsync(POWERSHELL, [...PS_ARGS, wrapped], {
     encoding: "utf8",
     timeout,
     maxBuffer: 4 * 1024 * 1024,
     windowsHide: true,
   });
-  if (stderr?.trim()) {
-    // PowerShell 把非终止错误写到 stderr，但不一定是致命错误
-    // 只在 stdout 为空且 stderr 有内容时才认为失败
-  }
   return stdout.trim();
 }
 
@@ -75,12 +77,14 @@ async function discoverFromRunningProcess() {
     const result = parsePowerShellJson(await runPowerShell(script));
     if (!result) return null;
     const processes = Array.isArray(result) ? result : [result];
-    // 优先找主进程（不是 Helper/Renderer）
-    const main = processes.find((p) => /DoubaoWork\.exe$/i.test(p.ExecutablePath) && !/helper|renderer/i.test(p.CommandLine || ""));
+    // 优先找主进程（不是 Helper/Renderer），且可执行文件名精确匹配 DoubaoWork.exe
+    const main = processes.find((p) => /[\\/]DoubaoWork\.exe$/i.test(p.ExecutablePath) && !/helper|renderer/i.test(p.CommandLine || ""));
     const target = main || processes[0];
     if (!target?.ExecutablePath) return null;
+    // 根据路径判断安装类型：WindowsApps 目录下的是 Store 版
+    const isStore = /[\\/]WindowsApps[\\/]/i.test(target.ExecutablePath);
     return {
-      type: "desktop",
+      type: isStore ? "store" : "desktop",
       mainBinary: target.ExecutablePath,
       helperBinary: path.join(path.dirname(target.ExecutablePath), "DoubaoWork Browser.exe"),
       version: null,
@@ -150,7 +154,12 @@ export async function discoverAppInstall() {
   // 桌面版优先（CDP 参数支持最可靠）
   if (fromProcess?.type === "desktop") return fromProcess;
   if (fromDesktop) return fromDesktop;
-  if (fromProcess) return fromProcess;
+  // Store 版：从进程反查时可能缺少 appUserModelId，用 Store 包探测补充
+  if (fromProcess?.type === "store") {
+    if (fromProcess.appUserModelId) return fromProcess;
+    if (fromStore) return fromStore;
+    return fromProcess;
+  }
   if (fromStore) return fromStore;
   return null;
 }
@@ -178,11 +187,11 @@ async function launchStoreApp(install, port) {
 "@
     $mgr = New-Object AppActivator+ApplicationActivationManager
     $am = [AppActivator+IApplicationActivationManager]$mgr
-    $args = "--remote-debugging-address=127.0.0.1 --remote-debugging-port=${port}"
-    $pid = 0
-    $hr = $am.ActivateApplication("${install.appUserModelId}", $args, 0, [ref]$pid)
+    $launchArgs = "--remote-debugging-address=127.0.0.1 --remote-debugging-port=${port}"
+    $procId = [uint32]0
+    $hr = $am.ActivateApplication("${install.appUserModelId}", $launchArgs, 0, [ref]$procId)
     if ($hr -ne 0) { throw "ActivateApplication failed: 0x$('{0:X8}' -f $hr)" }
-    $pid
+    $procId
   `;
   try {
     const output = await runPowerShell(script, { timeout: 15_000 });
@@ -315,11 +324,11 @@ export function generateCliEntry(dataRoot, nodePath, bridgePath) {
 }
 
 export function launcherScripts(command) {
-  const cmd = `"${command}"`;
+  const cmd = `call "${command}"`;
   return {
-    "启动豆包工作.cmd": `@echo off\r\nset NODE_OPTIONS=\r\nset NODE_PATH=\r\n${cmd} start\r\nif %errorlevel% equ 2 (\r\n  echo 需要重启豆包工作。请保存工作后由用户双击此入口确认。\r\n  exit /b 2\r\n)\r\nexit /b %errorlevel%\r\n`,
-    "恢复官方外观.cmd": `@echo off\r\nset NODE_OPTIONS=\r\nset NODE_PATH=\r\n${cmd} disable\r\n`,
-    "复制换肤提示词.cmd": `@echo off\r\nset NODE_OPTIONS=\r\nset NODE_PATH=\r\nfor /f "delims=" %%i in ('${cmd} prompt') do set "PROMPT_TEXT=%%i"\r\necho %PROMPT_TEXT% | clip\r\necho 已复制，粘贴到豆包工作对话即可。\r\n`,
+    "启动豆包工作.cmd": `@echo off\r\nsetlocal\r\nset NODE_OPTIONS=\r\nset NODE_PATH=\r\n${cmd} start\r\nif %errorlevel% neq 2 exit /b %errorlevel%\r\necho.\r\necho 需要重启豆包工作。请保存工作，并等待 Agent 当前任务结束。\r\nset /p answer=确认已保存并重启？输入 y 后回车，其他输入取消：\r\nif /i not "%answer%"=="y" (\r\n  echo 已取消，豆包工作保持打开。\r\n  exit /b 2\r\n)\r\n${cmd} start --force\r\nexit /b %errorlevel%\r\n`,
+    "恢复官方外观.cmd": `@echo off\r\nsetlocal\r\nset NODE_OPTIONS=\r\nset NODE_PATH=\r\n${cmd} disable\r\n`,
+    "复制换肤提示词.cmd": `@echo off\r\nsetlocal\r\nset NODE_OPTIONS=\r\nset NODE_PATH=\r\nfor /f "delims=" %%i in ('${cmd} prompt') do set "PROMPT_TEXT=%%i"\r\necho %PROMPT_TEXT% | clip\r\necho 已复制，粘贴到豆包工作对话即可。\r\n`,
   };
 }
 
@@ -329,6 +338,23 @@ export async function createDesktopShortcut(targetPath, linkName, desktopDirOver
   const desktopDir = desktopDirOverride || paths().desktopDir;
   await fs.mkdir(desktopDir, { recursive: true });
   const linkPath = path.join(desktopDir, `${linkName}.lnk`);
+  // 存在性检查：已有同名 .lnk 且目标不同时不覆盖
+  try {
+    await fs.access(linkPath);
+    // 用 WScript.Shell 读取已有快捷方式的目标
+    const readScript = `
+      $ws = New-Object -ComObject WScript.Shell
+      $sc = $ws.CreateShortcut('${linkPath.replace(/'/g, "''")}')
+      $sc.TargetPath
+    `;
+    const existingTarget = await runPowerShell(readScript, { timeout: 5_000 });
+    if (existingTarget && path.resolve(existingTarget) !== path.resolve(targetPath)) {
+      throw new Error("桌面已有同名快捷方式指向其他目标，未覆盖");
+    }
+  } catch (error) {
+    if (error.code !== "ENOENT" && !error.message.includes("未覆盖")) throw error;
+    if (error.message.includes("未覆盖")) throw error;
+  }
   // 用 WScript.Shell COM 创建 .lnk
   const script = `
     $ws = New-Object -ComObject WScript.Shell

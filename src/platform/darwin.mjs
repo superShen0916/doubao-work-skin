@@ -89,14 +89,18 @@ export async function inspectProcess(pid) {
 
 export async function listProcessesByName(exeNames) {
   const { stdout } = await execFileAsync("ps", ["-axo", "pid=,command="], { encoding: "utf8", maxBuffer: 4 * 1024 * 1024 });
-  const nameSet = new Set(exeNames.map((n) => n.toLowerCase()));
+  // 不按空格拆分命令行（路径可能含空格，如 Application Support）。
+  // 用正则匹配可执行文件名作为路径的最后一段，避免误匹配命令行参数。
+  const namePatterns = exeNames.map((name) => {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`(?:^|\\s|/|\\\\)${escaped}(?:\\s|$)`, "i");
+  });
   return stdout.split("\n").map((line) => {
     const match = line.match(/^\s*(\d+)\s+(.*)$/);
     return match ? { pid: Number(match[1]), command: match[2] } : null;
   }).filter((entry) => {
     if (!entry) return false;
-    const exe = path.basename(entry.command.split(/\s+/)[0] || "").toLowerCase();
-    return nameSet.has(exe);
+    return namePatterns.some((re) => re.test(entry.command));
   });
 }
 

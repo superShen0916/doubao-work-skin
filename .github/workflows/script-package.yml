@@ -27,3 +27,10 @@ jobs:
             dist/*-skill.zip
             dist/*-skill.zip.sha256
           if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-scripts
+          path: |
+            dist/*-windows-scripts.zip
+            dist/*-windows-scripts.zip.sha256
+          if-no-files-found: error

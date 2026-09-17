@@ -14,6 +14,7 @@ import {
   terminateProcess,
   killProcessTree,
   launchApp,
+  discoverAppInstall,
   ensurePrivateDir,
   ensurePrivateFile,
 } from "./platform/index.mjs";
@@ -174,7 +175,8 @@ function parseWatchCommand(command, { injectorPath, cwd }) {
     }
   }
   if (injectorIndex < 0) return null;
-  const executable = source.slice(0, injectorIndex).trim();
+  // 去除可执行文件路径首尾的引号（Windows 命令行中含空格路径会被引号包裹）
+  const executable = source.slice(0, injectorIndex).trim().replace(/^["']|["']$/g, "");
   const exeName = path.basename(executable);
   if (!(exeName === "node" || exeName === "node.exe" || executable.endsWith("/node") || executable.endsWith("\\node"))) return null;
   const tokens = source.slice(injectorIndex + injectorToken.length).trim().split(/\s+/);
@@ -291,10 +293,16 @@ export async function findDoubaoWorkPid({ execFileImpl = null } = {}) {
     const pids = stdout.trim().split(/\s+/).filter(Boolean).map(Number);
     return pids.length ? pids[0] : null;
   }
-  // 正常路径：通过 platform 层按进程名查找
-  const mainName = path.basename(DOUBAOWORK_BINARY);
+  // 正常路径：通过 platform 层获取实际应用路径，按进程名查找
+  const install = await discoverAppInstall().catch(() => null);
+  const mainBinary = install?.mainBinary || DOUBAOWORK_BINARY;
+  const mainName = path.basename(mainBinary);
   const rows = await listProcessesByName([mainName]).catch(() => []);
-  const match = rows.find((row) => String(row.command || "").includes("DoubaoWork.app/Contents/MacOS/DoubaoWork"));
+  const match = rows.find((row) => {
+    const cmd = String(row.command || "");
+    // 精确匹配可执行文件路径，或命令行以该路径开头
+    return cmd === mainBinary || cmd.startsWith(`${mainBinary} `) || cmd.startsWith(mainBinary);
+  });
   return match ? match.pid : null;
 }
 
@@ -368,13 +376,15 @@ export async function findDoubaoWorkBrowserPids({ execFileImpl = null } = {}) {
       return row.command === DOUBAOWORK_BROWSER_BINARY || row.command.startsWith(`${DOUBAOWORK_BROWSER_BINARY} --`);
     }).map((row) => row.pid);
   }
-  // 正常路径：通过 platform 层
-  const helperName = path.basename(DOUBAOWORK_BROWSER_BINARY);
+  // 正常路径：通过 platform 层获取实际应用路径
+  const install = await discoverAppInstall().catch(() => null);
+  const helperBinary = install?.helperBinary || DOUBAOWORK_BROWSER_BINARY;
+  const helperName = path.basename(helperBinary);
   const rows = await listProcessesByName([helperName]).catch(() => []);
   return rows
     .filter((row) => {
       const command = row.command;
-      return command === DOUBAOWORK_BROWSER_BINARY || command.startsWith(`${DOUBAOWORK_BROWSER_BINARY} --`);
+      return command === helperBinary || command.startsWith(`${helperBinary} `);
     })
     .map((row) => row.pid);
 }

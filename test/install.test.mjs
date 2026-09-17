@@ -35,7 +35,8 @@ async function fixture(fn) {
     await fs.writeFile(path.join(projectRoot, "scripts/installed-cli.mjs"), "// fixture\n");
     await fs.writeFile(path.join(projectRoot, "skins/sample/theme.json"), "original");
     await fs.mkdir(path.join(runtimeDir, "bin"), { recursive: true });
-    await fs.writeFile(path.join(runtimeDir, "bin/node"), "#!/bin/sh\nexit 0\n");
+    await fs.writeFile(path.join(runtimeDir, "bin/node"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+    await fs.writeFile(path.join(runtimeDir, "node.exe"), "@echo off\r\nexit 0\r\n");
     await fs.writeFile(path.join(runtimeDir, "LICENSE"), "runtime license");
     await fn({ projectRoot, runtimeDir, dataRoot, desktopDir, validate: async () => {} });
   } finally { await fs.rm(temp, { recursive: true, force: true }); }

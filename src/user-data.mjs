@@ -45,8 +45,10 @@ export async function prepareUserData({ projectRoot, dataRoot = defaultDataRoot,
     ? path.join(enginePath, "runtime/node.exe")
     : path.join(enginePath, "runtime/bin/node");
   const bridge = path.join(enginePath, "scripts/installed-cli.mjs");
-  const command = path.join(dataRoot, "skin");
+  const commandName = process.platform === "win32" ? "skin.cmd" : "skin";
+  const command = path.join(dataRoot, commandName);
   await atomicWrite(command, generateCliEntry(dataRoot, node, bridge), 0o700);
+  const launcherName = process.platform === "win32" ? "启动豆包工作.cmd" : "启动豆包工作.command";
   const sourceGuide = await fs.readFile(path.join(projectRoot, "AGENTS.md"), "utf8");
   const installedGuide = `# 已安装的脚本版皮肤工具：优先按本节操作
 
@@ -57,7 +59,7 @@ export async function prepareUserData({ projectRoot, dataRoot = defaultDataRoot,
 - 将 \`npm run check\` 替换成 \`${shellQuote(command)} check\`。
 - 个人皮肤目录：\`${skinsDir}\`。所有新建和调整在这里完成，不修改 engine 内的代码。
 - 共享 CSS 和选择器只读参考：\`${path.join(enginePath, "src")}\`。
-- 首次启用或需要重启时，请用户双击桌面“豆包工作皮肤”文件夹里的“启动豆包工作.command”。Agent 不执行 --force，也不运行此启动脚本代替用户确认。
+- 首次启用或需要重启时，请用户双击桌面"豆包工作皮肤"文件夹里的"${launcherName}"。Agent 不执行 --force，也不运行此启动脚本代替用户确认。
 - 重新安装或更新不会覆盖已有个人皮肤目录、状态和上次选择。新版本新增的内置皮肤会在安装时补入。
 - 完成应用后执行 \`verify <主题ID>\`。仅准备文件不能报告皮肤已生效。
 - 本节替代下文源码版的环境检查、项目路径和双击 .command 说明；其余制作及安全规则仍适用。

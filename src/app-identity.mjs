@@ -19,8 +19,6 @@ const execFileAsync = promisify(execFile);
 export const DOUBAOWORK_BINARY = "/Applications/DoubaoWork.app/Contents/MacOS/DoubaoWork";
 export const DOUBAOWORK_BROWSER_BINARY = "/Applications/DoubaoWork.app/Contents/Helpers/DoubaoWork Browser.app/Contents/MacOS/DoubaoWork Browser";
 
-const APP_EXECUTABLES = new Set([DOUBAOWORK_BINARY, DOUBAOWORK_BROWSER_BINARY]);
-
 async function findListeningPidsWithImpl(port, execFileImpl) {
   if (execFileImpl) {
     const { stdout } = await execFileImpl("lsof", ["-nP", `-iTCP:${Number(port)}`, "-sTCP:LISTEN", "-Fp"], { encoding: "utf8", timeout: 2_000, maxBuffer: 1024 * 1024 });
@@ -45,17 +43,20 @@ export async function assertDoubaoWorkPort(port, { execFileImpl } = {}) {
     const pids = await findListeningPidsWithImpl(port, execFileImpl);
     if (!pids.length) throw new Error("未找到监听进程");
 
+    // 精确路径白名单：macOS 常量 + 平台发现的实际可执行文件路径
+    const allowed = new Set([DOUBAOWORK_BINARY, DOUBAOWORK_BROWSER_BINARY]);
     const install = await discoverAppInstall().catch(() => null);
-    const allowedDir = install ? path.dirname(install.mainBinary).toLowerCase() : null;
+    if (install) {
+      allowed.add(path.resolve(install.mainBinary));
+      if (install.helperBinary) allowed.add(path.resolve(install.helperBinary));
+    }
 
     for (const pid of pids) {
       const executable = await getProcessExecutableWithImpl(pid, execFileImpl);
       const trimmed = executable?.trim();
       if (!trimmed) throw new Error("监听进程不属于豆包工作");
-      // macOS 精确匹配完整路径（原有行为）
-      if (APP_EXECUTABLES.has(trimmed)) continue;
-      // 跨平台回退：验证目录匹配
-      if (allowedDir && path.dirname(trimmed).toLowerCase().startsWith(allowedDir)) continue;
+      // 精确匹配完整路径（规范化后比较），不使用目录前缀（会放行同前缀相邻目录）
+      if (allowed.has(trimmed) || allowed.has(path.resolve(trimmed))) continue;
       throw new Error("监听进程不属于豆包工作");
     }
   } catch (error) {

@@ -1,4 +1,4 @@
-# 豆包工作皮肤 - Windows 安装脚本
+﻿# 豆包工作皮肤 - Windows 安装脚本
 # 仅使用 Windows 自带工具（PowerShell），不依赖系统 Node.js、Git 或开发工具。
 
 $ErrorActionPreference = "Stop"
