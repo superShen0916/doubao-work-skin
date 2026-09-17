@@ -195,94 +195,174 @@ src/
 ```javascript
 /**
  * @typedef {Object} PlatformPaths
- * @property {string} dataRoot        - 用户数据目录
+ * @property {string} dataRoot        - 用户数据目录（macOS: ~/Library/Application Support/DoubaoWorkSkin; Windows: %LOCALAPPDATA%\DoubaoWorkSkin）
  * @property {string} defaultSkinsDir - 默认皮肤目录
  * @property {string} desktopDir      - 桌面目录
  */
 
 /**
- * @typedef {Object} AppBinaryInfo
- * @property {string} mainBinary      - 主程序可执行文件路径
- * @property {string} helperBinary    - Helper 可执行文件路径（用于进程识别）
- * @property {string[]} candidatePaths - 候选安装路径（用于探测）
+ * 应用安装信息——统一描述 Store 版和桌面版
+ * @typedef {Object} AppInstall
+ * @property {'store'|'desktop'} type       - 安装类型
+ * @property {string} mainBinary            - 主程序可执行文件绝对路径
+ * @property {string} helperBinary          - Helper 可执行文件名（用于进程识别，如 "DoubaoWork Helper.exe"）
+ * @property {string} [packageFamilyName]   - Store 包家族名（仅 store 类型）
+ * @property {string} [applicationId]       - Store 应用 ID（仅 store 类型）
+ * @property {string} [appUserModelId]      - Store 启动标识符 = PackageFamilyName!ApplicationId（仅 store 类型）
+ * @property {string} [version]             - 应用版本
  */
 
 /**
  * @typedef {Object} PlatformApi
  * @property {() => PlatformPaths} paths
- * @property {() => AppBinaryInfo} appBinaries
+ * @property {() => Promise<AppInstall|null>} discoverAppInstall  - 探测已安装的豆包工作（优先运行中进程，然后 Store，然后桌面路径）
+ * @property {(install: AppInstall, port: number) => Promise<number>} launchApp  - 启动应用并返回 PID；Store 版用 IApplicationActivationManager，桌面版直接 spawn
  * @property {(port: number) => Promise<number[]>} findListeningPids
  * @property {(pid: number) => Promise<string>} getProcessExecutable
  * @property {(pid: number) => Promise<{command: string, cwd: string|null}>} inspectProcess
- * @property {() => Promise<{pid: number, command: string}[]>} listProcesses
+ * @property {(exeNames: string[]) => Promise<{pid: number, command: string}[]>} listProcessesByName
  * @property {(pid: number) => Promise<boolean>} isProcessAlive
- * @property {(pid: number) => Promise<void>} terminateProcess
- * @property {(pid: number) => Promise<void>} killProcessTree
+ * @property {(pid: number) => Promise<void>} terminateProcess   - 优雅终止（taskkill /PID）
+ * @property {(pid: number) => Promise<void>} killProcessTree    - 强制终止进程树（taskkill /PID /F /T）
  * @property {(command: string) => string} shellQuote
- * @property {() => string} getCliEntryContent  - 生成 skin 命令入口脚本内容
- * @property {() => Object<string,string>} launcherScripts  - 生成启动/恢复/复制提示词脚本
+ * @property {() => string} getCliEntryContent   - 生成 skin 命令入口脚本内容
+ * @property {() => Object<string,string>} launcherScripts   - 生成启动/恢复/复制提示词脚本
+ * @property {(targetPath: string, linkName: string) => Promise<void>} createDesktopShortcut  - 创建桌面快捷方式
  */
 ```
 
-### 3.3 Windows 应用路径探测
+### 3.3 Windows 应用定位与启动策略（核心设计）
 
-Windows 版豆包工作的常见安装位置（需在实际 Windows 机器上验证）：
+豆包工作 Windows 版有两种分发形态，定位和启动方式完全不同：
 
-1. **用户级安装**（最常见，Electron 应用默认）：
-   - `%LOCALAPPDATA%\Programs\doubao-work\DoubaoWork.exe`
-   - `%LOCALAPPDATA%\Programs\DoubaoWork\DoubaoWork.exe`
-2. **系统级安装**：
-   - `C:\Program Files\DoubaoWork\DoubaoWork.exe`
-   - `C:\Program Files (x86)\DoubaoWork\DoubaoWork.exe`
-3. **通过注册表查询**：
-   - `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\*` 中查找 DisplayName 含 "豆包工作" 或 "DoubaoWork" 的条目，读取 InstallLocation
-   - 或 `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*`
+| 形态 | 安装位置 | 启动方式 | CDP 兼容性 |
+|---|---|---|---|
+| **Microsoft Store 版** (MSIX) | `C:\Program Files\WindowsApps\<PackageFamilyName>\` | `IApplicationActivationManager.ActivateApplication` | 不确定——可能吃掉 `--remote-debugging-port` 参数 |
+| **桌面 EXE 版** | `%LOCALAPPDATA%\Programs\DoubaoWork\` 或 `%PROGRAMFILES%\DoubaoWork\` | 直接 `spawn(exe, args)` | 可靠——Electron 标准行为 |
 
-**探测策略**（按优先级）：
-1. 读取注册表 Uninstall 键中的 InstallLocation
-2. 遍历候选路径列表，检查 `DoubaoWork.exe` 是否存在
-3. 都找不到时，让用户手动指定路径（环境变量 `DWS_APP_PATH` 或安装时交互输入）
+> 参考：Codex Dream Skin（同类 CDP 换肤项目，11k+ stars）在 Windows 上面临完全相同的问题。Codex 是纯 Store 应用，它通过 `Get-AppxPackage` 定位，用 `IApplicationActivationManager` 启动，并发现 Store 激活会把 CDP 参数转换成 `codex://` 导航，需要回退到直接启动 exe。
 
-> **开放问题**：Windows 版豆包工作的实际安装路径和进程名需要在 Windows 机器上确认。上述为 Electron 应用的典型路径，可能需要调整。
+#### 应用定位：三级策略（按优先级）
+
+```
+第一级：运行中进程反查（最准确，零猜测）
+  - 如果豆包工作正在运行，通过进程名或已有 CDP 端口找到 PID
+  - Get-CimInstance Win32_Process 拿 ExecutablePath
+  - 从路径自动判断是 Store 版（含 WindowsApps）还是桌面版
+  - Store 版同时从进程拿 PackageFamilyName（通过 Get-AppxPackage 反查）
+
+第二级：Store 包探测
+  - Get-AppxPackage -Name '*doubao*' 或 '*春田*'
+  - 从 manifest 拿 InstallLocation + Executable + ApplicationId
+  - 验证 SignatureKind -eq 'Store'，排除开发模式包
+  - 拼出 AppUserModelId = PackageFamilyName!ApplicationId
+
+第三级：桌面安装路径探测
+  - %LOCALAPPDATA%\Programs\DoubaoWork\DoubaoWork.exe
+  - %LOCALAPPDATA%\Programs\豆包工作\DoubaoWork.exe
+  - %LOCALAPPDATA%\DoubaoWork\app-*\DoubaoWork.exe（Squirrel 模式）
+  - %PROGRAMFILES%\DoubaoWork\DoubaoWork.exe
+  - %PROGRAMFILES(X86)%\DoubaoWork\DoubaoWork.exe
+
+兜底：环境变量 DWS_APP_PATH=C:\custom\path\DoubaoWork.exe
+```
+
+**多版本共存时的选择规则**：
+1. 正在运行的版本优先（用户当前在用的）
+2. 都没运行时，**桌面版优先**（CDP 兼容性更可靠）
+3. 只有 Store 版时，使用 Store 版但需额外验证 CDP 可用性
+
+#### 应用启动：双轨制 + CDP 验证闭环
+
+**桌面版启动**（直接 spawn）：
+
+```javascript
+spawn(install.mainBinary, [
+  "--remote-debugging-address=127.0.0.1",
+  `--remote-debugging-port=${port}`,
+], {
+  detached: true,
+  stdio: ["ignore", logFd, errFd],
+  windowsHide: true,  // Windows 专用：不弹出控制台窗口
+});
+child.unref();
+```
+
+**Store 版启动**（COM 接口激活 + 回退）：
+
+```
+1. 用 IApplicationActivationManager.ActivateApplication(appUserModelId, "--remote-debugging-port=PORT") 启动
+2. 等待最多 10 秒，检查 CDP 端口是否监听且归属豆包进程
+3. 如果 CDP 端口起来了 → 成功
+4. 如果没起来（Store 激活吃掉了参数）→ 关闭应用，尝试直接启动 exe
+   Start-Process -FilePath $exe -ArgumentList "--remote-debugging-port=PORT"
+5. 直接启动也失败（权限问题，WindowsApps ACL）→ 报错：
+   "检测到 Microsoft Store 版豆包工作，该版本可能不支持调试端口。
+    请从官网 https://www.doubao.com/download/desktop 下载桌面版安装后重试。"
+```
+
+**统一验证**（无论哪种启动方式）：
+- 启动后必须通过 `waitForCdp(port)` 验证端口真的在监听
+- 且通过 `assertDoubaoWorkPort(port)` 验证监听进程属于豆包工作
+- 两者都通过才视为启动成功，否则按失败处理并给出明确错误
+
+> **关键设计决策**：不假设 `--remote-debugging-port` 一定生效。Store 版 Electron 应用（如 Codex）已被证实会在包激活时吞掉或转换调试参数。启动后的 CDP 端口验证是唯一可靠的成功判据。
 
 ### 3.4 Windows 端口归属校验方案
 
-macOS 用 `lsof` + `ps`，Windows 等价方案：
+macOS 用 `lsof` + `ps`，Windows 用 PowerShell 结构化命令（参考 Codex Dream Skin 的实现）：
 
-```
-1. netstat -ano | findstr :PORT | findstr LISTENING
-   → 提取 PID（最后一列）
-2. tasklist /FI "PID eq <PID>" /FO CSV /NH
-   → 提取映像名（第一列）
-3. 验证映像名是否为 DoubaoWork.exe 或 DoubaoWork Helper.exe
-```
-
-或用 PowerShell 一行完成：
 ```powershell
-Get-NetTCPConnection -LocalPort PORT -State Listen | Select-Object -ExpandProperty OwningProcess | ForEach-Object { Get-Process -Id $_ | Select-Object -ExpandProperty Path }
+# 1. 拿监听指定端口的 PID（结构化输出，无需解析文本）
+Get-NetTCPConnection -State Listen -LocalPort $port | Select-Object OwningProcess, LocalAddress
+
+# 2. 拿进程可执行文件完整路径
+Get-CimInstance Win32_Process -Filter "ProcessId = $pid" | Select-Object ExecutablePath
+
+# 3. 验证 ExecutablePath 指向豆包工作的安装目录
 ```
 
-**方案选择**：使用 `netstat` + `tasklist`，因为：
-- 两者在所有 Windows 10/11 上默认可用
-- 不需要 PowerShell 启动开销
-- 输出格式稳定，易于解析
+**方案选择理由**（不用 `netstat` + `tasklist`）：
+- `Get-NetTCPConnection` 在 PowerShell 5.1+（Windows 10 1607+ 自带）可用，输出结构化对象，比解析 `netstat -ano` 文本可靠
+- `Get-CimInstance Win32_Process` 直接返回 `ExecutablePath` 和 `CommandLine`，比 `tasklist` 信息更全
+- `wmic` 已在 Windows 11 24H2 弃用，`Get-CimInstance` 是其官方替代
+- Node.js 通过 `execFile("powershell", ["-NoProfile", "-Command", "..."])` 调用，单次调用完成端口+进程验证
+
+**在 Node.js 中的封装**：
+
+```javascript
+async function findListeningPids(port) {
+  const ps = `Get-NetTCPConnection -State Listen -LocalPort ${port} | Select-Object -ExpandProperty OwningProcess`;
+  const { stdout } = await execFileAsync("powershell", ["-NoProfile", "-Command", ps], { encoding: "utf8" });
+  return stdout.split("\n").map(s => Number(s.trim())).filter(n => n > 0);
+}
+
+async function getProcessExecutable(pid) {
+  const ps = `(Get-CimInstance Win32_Process -Filter "ProcessId=${pid}").ExecutablePath`;
+  const { stdout } = await execFileAsync("powershell", ["-NoProfile", "-Command", ps], { encoding: "utf8" });
+  return stdout.trim() || null;
+}
+```
 
 ### 3.5 Windows 进程管理方案
 
-| 操作 | Windows 实现 |
-|---|---|
-| 查找主进程 | `tasklist /FI "IMAGENAME eq DoubaoWork.exe" /FO CSV /NH` → 解析 PID |
-| 查找 Helper 进程 | `tasklist /FI "IMAGENAME eq DoubaoWork Helper.exe" /FO CSV /NH` |
-| 查找 watch 进程 | `tasklist /FI "IMAGENAME eq node.exe" /FO CSV /NH` → 对每个 PID 用 `wmic process where ProcessId=PID get CommandLine` 过滤 `injector.mjs --watch` |
-| 优雅终止 | `taskkill /PID N`（发送 WM_CLOSE，对控制台程序等价 Ctrl+C） |
-| 强制终止 | `taskkill /PID N /F /T`（/F 强制，/T 终止子进程树） |
-| 进程存活检查 | `tasklist /FI "PID eq N" /FO CSV /NH`，输出含 PID 则存活 |
+| 操作 | Windows 实现 | 说明 |
+|---|---|---|
+| 查找主进程 | `Get-CimInstance Win32_Process -Filter "Name='DoubaoWork.exe'"` | 返回 PID、CommandLine、ExecutablePath |
+| 查找 Helper 进程 | `Get-CimInstance Win32_Process -Filter "Name='DoubaoWork Helper.exe'"` | Electron GPU/渲染进程 |
+| 查找 watch 进程 | `Get-CimInstance Win32_Process -Filter "Name='node.exe'"` + CommandLine 过滤 `injector.mjs --watch` | 一次调用拿全量信息 |
+| 优雅终止 | `taskkill /PID N` | 发送 WM_CLOSE，控制台程序等价 Ctrl+C |
+| 强制终止进程树 | `taskkill /PID N /F /T` | /F 强制，/T 含子进程 |
+| 进程存活检查 | `Get-Process -Id N -ErrorAction SilentlyContinue` | 有输出则存活 |
 
-> **注意**：`wmic` 在 Windows 11 24H2 已被弃用，可能需要用 PowerShell `Get-CimInstance Win32_Process -Filter "ProcessId=PID"` 替代。为兼容性，优先用 `tasklist` 获取命令行不可行时（tasklist 不返回命令行），用 PowerShell。
+**为什么不用 `tasklist`**：`tasklist` 不返回 CommandLine，无法区分哪个 node.exe 是我们的 watch 进程。`Get-CimInstance Win32_Process` 一次返回 PID、CommandLine、ExecutablePath，信息完整且结构化。
 
-**watch 进程命令行获取**：`tasklist` 不返回完整命令行。方案：
-- 用 PowerShell `Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Select-Object ProcessId, CommandLine`
-- 或在 spawn watch 进程时，将 PID 写入状态文件，优先从状态文件读取，不依赖系统查询
+**watch 进程识别**：优先从状态文件读取 `injectorPid`，然后用 `Get-CimInstance` 验证该 PID 的 CommandLine 包含 `injector.mjs --watch` 且 ExecutablePath 指向我们的 Node runtime。状态文件丢失时，遍历所有 `node.exe` 进程过滤 CommandLine。
+
+**进程终止的 Windows 特性**：
+- Node.js 的 `process.kill(pid, 'SIGTERM')` 在 Windows 上映射为 `TerminateProcess`（强制终止，不优雅），所以必须用 `taskkill /PID N` 做优雅终止
+- `taskkill /PID N` 对 GUI 程序发送 WM_CLOSE，对控制台程序发送 CTRL_C_EVENT，有机会优雅退出
+- 优雅终止超时后用 `taskkill /PID N /F /T` 强制清理整个进程树
 
 ### 3.6 Windows 安装入口方案
 
@@ -338,23 +418,25 @@ macOS 生成 `skin`（sh 脚本），Windows 生成 `skin.cmd`：
 ```batch
 @echo off
 setlocal
-set "DWS_STATE_ROOT=%APPDATA%\DoubaoWorkSkin"
-set "DWS_SKINS_DIR=%APPDATA%\DoubaoWorkSkin\skins"
-"%APPDATA%\DoubaoWorkSkin\engine\runtime\node.exe" "%APPDATA%\DoubaoWorkSkin\engine\scripts\installed-cli.mjs" %*
+set "DWS_STATE_ROOT=%LOCALAPPDATA%\DoubaoWorkSkin"
+set "DWS_SKINS_DIR=%LOCALAPPDATA%\DoubaoWorkSkin\skins"
+"%LOCALAPPDATA%\DoubaoWorkSkin\engine\runtime\node.exe" "%LOCALAPPDATA%\DoubaoWorkSkin\engine\scripts\installed-cli.mjs" %*
 endlocal
 ```
+
+> 数据目录使用 `%LOCALAPPDATA%`（而非 `%APPDATA%`），因为 engine 内含 Node.js 二进制（~30MB），不应随域账户漫游；与 Codex Dream Skin 等同类项目一致。
 
 ### 3.8 Windows 桌面快捷方式方案
 
 macOS 用符号链接指向 `启动入口` 文件夹。Windows 上：
 - 符号链接需要管理员权限，不适合普通用户
-- 方案：在桌面创建 `豆包工作皮肤.lnk` 快捷方式，目标指向 `%APPDATA%\DoubaoWorkSkin\启动入口` 文件夹
+- 方案：在桌面创建 `豆包工作皮肤.lnk` 快捷方式，目标指向 `%LOCALAPPDATA%\DoubaoWorkSkin\启动入口` 文件夹
 - 用 PowerShell COM 对象创建：
 
 ```powershell
 $ws = New-Object -ComObject WScript.Shell
 $shortcut = $ws.CreateShortcut("$env:USERPROFILE\Desktop\豆包工作皮肤.lnk")
-$shortcut.TargetPath = "$env:APPDATA\DoubaoWorkSkin\启动入口"
+$shortcut.TargetPath = "$env:LOCALAPPDATA\DoubaoWorkSkin\启动入口"
 $shortcut.Save()
 ```
 
@@ -418,40 +500,44 @@ import path from "node:path";
 
 const execFileAsync = promisify(execFile);
 
-// 通过 netstat + tasklist 查找监听端口的 PID
+function psCommand(script) {
+  return execFileAsync("powershell", ["-NoProfile", "-Command", script], { encoding: "utf8" });
+}
+
+// 通过 Get-NetTCPConnection 查找监听端口的 PID
 export async function findListeningPids(port) {
-  const { stdout } = await execFileAsync("netstat", ["-ano"], { encoding: "utf8" });
-  const pids = new Set();
-  for (const line of stdout.split("\n")) {
-    if (!line.includes(`:${port}`) || !line.includes("LISTENING")) continue;
-    const match = line.trim().split(/\s+/);
-    const pid = Number(match.at(-1));
-    if (pid > 0) pids.add(pid);
-  }
-  return [...pids];
+  const { stdout } = await psCommand(`Get-NetTCPConnection -State Listen -LocalPort ${port} | Select-Object -ExpandProperty OwningProcess`);
+  return stdout.split("\n").map(s => Number(s.trim())).filter(n => n > 0);
 }
 
-// 通过 tasklist 获取进程映像名
+// 通过 Get-CimInstance 获取进程可执行文件路径
 export async function getProcessExecutable(pid) {
-  try {
-    const { stdout } = await execFileAsync("tasklist", ["/FI", `PID eq ${pid}`, "/FO", "CSV", "/NH"], { encoding: "utf8" });
-    const match = stdout.match(/"([^"]+\.exe)"/i);
-    return match ? match[1] : null;
-  } catch { return null; }
+  const { stdout } = await psCommand(`(Get-CimInstance Win32_Process -Filter "ProcessId=${pid}").ExecutablePath`);
+  return stdout.trim() || null;
 }
 
-// 通过 PowerShell 获取进程命令行和工作目录
+// 通过 Get-CimInstance 获取进程命令行（Windows 上获取 cwd 需要 NtQueryInformationProcess，第一阶段返回 null）
 export async function inspectProcess(pid) {
-  const ps = `Get-CimInstance Win32_Process -Filter "ProcessId=${pid}" | Select-Object CommandLine, ExecutablePath | ConvertTo-Json -Compress`;
-  const { stdout } = await execFileAsync("powershell", ["-NoProfile", "-Command", ps], { encoding: "utf8" });
+  const { stdout } = await psCommand(`Get-CimInstance Win32_Process -Filter "ProcessId=${pid}" | Select-Object CommandLine, ExecutablePath | ConvertTo-Json -Compress`);
   const data = JSON.parse(stdout.trim() || "{}");
-  return { command: data.CommandLine || "", cwd: null }; // Windows 上获取 cwd 需要 NtQueryInformationProcess，较复杂，第一阶段返回 null
+  return { command: data.CommandLine || "", cwd: null };
 }
 
-// 终止进程（先优雅后强制）
+// 按可执行文件名列出进程
+export async function listProcessesByName(exeNames) {
+  const filter = exeNames.map(name => `Name='${name}'`).join(" OR ");
+  const { stdout } = await psCommand(`Get-CimInstance Win32_Process -Filter "${filter}" | Select-Object ProcessId, CommandLine, ExecutablePath | ConvertTo-Json -Compress`);
+  const data = JSON.parse(stdout.trim() || "[]");
+  return (Array.isArray(data) ? data : [data]).map(p => ({
+    pid: Number(p.ProcessId),
+    command: p.CommandLine || "",
+    executable: p.ExecutablePath || null,
+  }));
+}
+
+// 优雅终止（taskkill 发送 WM_CLOSE / CTRL_C）
 export async function terminateProcess(pid) {
-  await execFileAsync("taskkill", ["/PID", String(pid), "/T"]).catch(() => {});
-  // 等待退出
+  await execFileAsync("taskkill", ["/PID", String(pid)]).catch(() => {});
   for (let i = 0; i < 10; i++) {
     if (!await isProcessAlive(pid)) return;
     await new Promise(r => setTimeout(r, 500));
@@ -459,51 +545,71 @@ export async function terminateProcess(pid) {
   await killProcessTree(pid);
 }
 
+// 强制终止进程树
 export async function killProcessTree(pid) {
-  await execFileAsync("taskkill", ["/PID", String(pid), "/F", "/T"]);
+  await execFileAsync("taskkill", ["/PID", String(pid), "/F", "/T"]).catch(() => {});
+}
+
+// 进程存活检查
+export async function isProcessAlive(pid) {
+  try {
+    await execFileAsync("powershell", ["-NoProfile", "-Command", `Get-Process -Id ${pid} -ErrorAction Stop`], { encoding: "utf8" });
+    return true;
+  } catch { return false; }
 }
 ```
 
 ### 4.2 `src/app-identity.mjs` 重构
 
-将硬编码路径改为从 platform 层获取：
+将硬编码路径和平台特定命令改为从 platform 层获取：
 
 ```javascript
-import { appBinaries, findListeningPids, getProcessExecutable } from "./platform/index.mjs";
+import { discoverAppInstall, findListeningPids, getProcessExecutable } from "./platform/index.mjs";
 
-export async function assertDoubaoWorkPort(port, { execFileImpl } = {}) {
-  // 端口校验逻辑不变，但调用 platform 层的 findListeningPids 和 getProcessExecutable
+// 缓存已探测的应用安装信息，避免重复探测
+let cachedInstall = null;
+
+export async function getAppInstall() {
+  if (!cachedInstall) cachedInstall = await discoverAppInstall();
+  return cachedInstall;
+}
+
+export async function assertDoubaoWorkPort(port) {
+  const install = await getAppInstall();
+  if (!install) throw new Error("未找到豆包工作安装");
   const pids = await findListeningPids(port);
   if (!pids.length) throw new Error("未找到监听进程");
-  const { mainBinary, helperBinary } = appBinaries();
-  const allowedNames = new Set([
-    path.basename(mainBinary).toLowerCase(),
-    path.basename(helperBinary).toLowerCase(),
-  ]);
+  const allowedDir = path.dirname(install.mainBinary).toLowerCase();
   for (const pid of pids) {
     const exe = await getProcessExecutable(pid);
-    if (!exe || !allowedNames.has(path.basename(exe).toLowerCase())) {
+    // 验证可执行文件位于豆包工作安装目录下（覆盖主进程和 Helper 进程）
+    if (!exe || !path.dirname(exe).toLowerCase().startsWith(allowedDir)) {
       throw new Error("监听进程不属于豆包工作");
     }
   }
 }
 ```
 
+> 关键变化：不再硬编码 `/Applications/DoubaoWork.app/...`，而是通过 `discoverAppInstall()` 动态获取当前平台的应用安装信息。端口校验验证进程可执行文件位于安装目录下，而非匹配固定文件名。
+
 ### 4.3 `src/runtime.mjs` 重构
 
 将以下函数改为调用 platform 层：
 - `createRuntimePaths` → `platform.paths()`
 - `defaultInspectProcess` → `platform.inspectProcess()`
-- `findOwnedWatchProcesses` 中的 `ps` → `platform.listProcesses()`
-- `findDoubaoWorkPid` → 用 `platform.listProcesses()` 过滤主进程名
-- `findDoubaoWorkBrowserPids` → 用 `platform.listProcesses()` 过滤 Helper 进程名
+- `findOwnedWatchProcesses` 中的 `ps` → `platform.listProcessesByName(['node.exe'])`
+- `findDoubaoWorkPid` → 用 `platform.listProcessesByName([主进程名])`
+- `findDoubaoWorkBrowserPids` → 用 `platform.listProcessesByName([Helper 进程名])`
 - `stopDoubaoWork` / `stopWatchProcess` → `platform.terminateProcess()` / `platform.killProcessTree()`
 - `isProcessAlive` → `platform.isProcessAlive()`
-- `ensureRuntimeRoot` 中的 chmod → `platform.ensurePrivateDir()`
+- `ensureRuntimeRoot` 中的 chmod → Windows 上 no-op
 
-`launchDoubaoWork` 和 `spawnWatchProcess` 的 spawn 调用保持不变（Node 的 `child_process.spawn` 跨平台），但：
-- Windows 上需要加 `windowsHide: true` 选项（避免弹出控制台窗口）
-- `detached: true` 在 Windows 上行为不同，需测试验证
+`launchDoubaoWork` 改为调用 `platform.launchApp(install, port)`，由 platform 层统一处理：
+- 桌面版：直接 spawn exe，加 `windowsHide: true`
+- Store 版：`IApplicationActivationManager` 包激活，启动后验证 CDP 端口，不生效则回退直接启动 exe
+- 两种方式都返回 PID，调用方统一用 `waitForCdp` 验证
+
+`spawnWatchProcess` 的 spawn 调用保持不变，但 Windows 上加 `windowsHide: true`。
 
 ### 4.4 `src/user-data.mjs` 重构
 
@@ -550,7 +656,9 @@ export async function assertDoubaoWorkPort(port, { execFileImpl } = {}) {
 
 ### 5.1 目录结构
 
-Windows 数据目录：`%APPDATA%\DoubaoWorkSkin`（即 `C:\Users\<用户名>\AppData\Roaming\DoubaoWorkSkin`）
+Windows 数据目录：`%LOCALAPPDATA%\DoubaoWorkSkin`（即 `C:\Users\<用户名>\AppData\Local\DoubaoWorkSkin`）
+
+> 选择 Local 而非 Roaming 的理由：engine 内含 Node.js 二进制（~30MB），不应随域账户漫游；本工具是纯本地工具，无漫游需求。与 Codex Dream Skin 等同类项目一致。
 
 ```
 DoubaoWorkSkin/
@@ -663,13 +771,16 @@ jobs:
 ### Phase 2：Windows 平台实现
 
 1. 创建 `src/platform/win32.mjs`（Windows 实现）
-2. 实现端口校验（netstat + tasklist）
-3. 实现进程查找与管理（tasklist + taskkill）
-4. 实现路径与 shellQuote
-5. 实现 CLI 入口生成（skin.cmd）
-6. 实现启动脚本生成（.cmd）
-7. 实现桌面快捷方式创建（PowerShell COM）
-8. 编写 Windows 平台层单元测试（mock netstat/tasklist 输出）
+2. 实现应用定位（三级策略：进程反查 → Store 包探测 → 桌面路径遍历）
+3. 实现 Store 应用启动（`IApplicationActivationManager` COM 接口 + CDP 验证回退）
+4. 实现桌面应用启动（直接 spawn + `windowsHide: true`）
+5. 实现端口校验（`Get-NetTCPConnection` + `Get-CimInstance Win32_Process`）
+6. 实现进程查找与管理（`Get-CimInstance` + `taskkill`）
+7. 实现路径与 shellQuote
+8. 实现 CLI 入口生成（skin.cmd）
+9. 实现启动脚本生成（.cmd）
+10. 实现桌面快捷方式创建（PowerShell COM `WScript.Shell`）
+11. 编写 Windows 平台层单元测试（mock PowerShell 输出）
 
 **验收标准**：Windows 平台层单元测试通过；`npm run check` + `npm test` 在 Windows CI 上通过。
 
@@ -704,11 +815,14 @@ jobs:
 
 | 风险 | 影响 | 缓解措施 |
 |---|---|---|
-| Windows 版豆包工作的实际安装路径/进程名未知 | 无法定位应用 | Phase 2 前先在 Windows 机器上确认；设计路径探测机制，支持环境变量覆盖 |
-| Windows 上 `spawn detached` + `unref` 行为差异 | watch 进程可能随父进程退出 | 需在 Windows 真机测试；必要时用 `child_process.spawn` 的 `detached: true` + `stdio: 'ignore'` + `windowsHide: true` |
-| PowerShell 执行策略限制 | 用户无法运行 .ps1 | 通过 .cmd 入口用 `-ExecutionPolicy Bypass` 绕过 |
-| `netstat`/`tasklist` 输出在不同 Windows 语言版本中格式差异 | 解析失败 | 使用 `/FO CSV` 格式输出，避免语言相关的列名；CSV 解析稳定 |
+| **Store 版豆包工作不保留 `--remote-debugging-port` 参数** | Store 版无法开启 CDP，换肤不可用 | 启动后验证 CDP 端口，不生效时报清晰错误并提示安装桌面版；桌面版优先策略 |
+| **Store 版直接启动 exe 权限不足** | WindowsApps ACL 阻止直接执行 | 优先用 `IApplicationActivationManager` 包激活；直接启动仅作回退且预期可能失败 |
+| Windows 版豆包工作的实际进程名/Helper 名未知 | 进程识别和端口校验失败 | Phase 2 前在 Windows 机器上确认；进程名支持配置，通过 `AppInstall.helperBinary` 传入 |
+| Windows 上 `spawn detached` + `unref` 行为差异 | watch 进程可能随父进程退出 | 用 `detached: true` + `stdio: 'ignore'` + `windowsHide: true` + `child.unref()`；真机验证 |
+| PowerShell 执行策略限制 | 用户无法运行 .ps1 | 安装入口用 .cmd 包装 `-ExecutionPolicy Bypass`；安装后生成的脚本用 RemoteSigned |
+| `Get-NetTCPConnection` 在极旧 Windows 版本不可用 | 端口校验失败 | 要求 Windows 10 1607+（PowerShell 5.1+）；安装脚本检查系统版本 |
 | Windows Defender 或企业策略拦截脚本/Node 下载 | 安装失败 | 文档中说明；提供手动下载 Node.js 的备选方案 |
+| 中文用户名/路径含非 ASCII 字符 | 脚本/路径处理出错 | 全程 UTF-8；PowerShell 设置 `[Console]::OutputEncoding = [Text.Encoding]::UTF8`；测试中文路径场景 |
 
 ### 8.2 中风险
 
@@ -719,13 +833,17 @@ jobs:
 | Node.js Windows 版体积较大（约 30MB zip） | 下载时间长 | 与 macOS 版类似，可接受；支持缓存已下载文件 |
 | 中文路径/用户名包含非 ASCII 字符 | 脚本/路径处理可能出错 | 全程使用 UTF-8；PowerShell 默认 UTF-8（5.1 需设置 `[Console]::OutputEncoding`）；测试中文用户名场景 |
 
-### 8.3 开放问题
+### 8.3 开放问题（需 Windows 真机验证）
 
-1. **Windows 版豆包工作的进程名和安装路径**：需要在 Windows 机器上实际确认。本方案假设为 `DoubaoWork.exe`，安装在 `%LOCALAPPDATA%\Programs\` 下。
-2. **Windows 版是否支持 `--remote-debugging-port` 参数**：Electron 应用通常支持，但需确认豆包工作 Windows 版没有禁用或修改 CDP。
-3. **Windows 版豆包工作的页面 URL scheme**：macOS 版使用 `doubaowork:` / `chrome:` protocol，Windows 版应一致，但需验证。
-4. **是否需要支持 ARM64 Windows**：Node.js 提供 win-arm64 构建，但豆包工作 Windows 版是否有 ARM64 版本未知。第一阶段仅支持 x64。
-5. **安装时是否需要管理员权限**：用户级安装（`%LOCALAPPDATA%`）不需要管理员；系统级安装可能需要。方案默认用户级安装。
+1. **Store 版豆包工作是否保留 `--remote-debugging-port` 参数**：这是最关键的问题。Codex（同类 Store 应用）已被证实在包激活时会吃掉 CDP 参数。豆包工作 Store 版需要验证：
+   - `IApplicationActivationManager.ActivateApplication(appUserModelId, "--remote-debugging-port=9342")` 后端口是否监听？
+   - 如果不监听，直接启动 `WindowsApps\...\DoubaoWork.exe --remote-debugging-port=9342` 是否有权限？
+   - 如果 Store 版完全不支持 CDP，方案退化为仅支持桌面 EXE 版，安装时检测到 Store 版提示用户下载桌面版。
+2. **Windows 版豆包工作的进程名和 Helper 进程名**：假设为 `DoubaoWork.exe` 和 `DoubaoWork Helper.exe`，需真机确认。Store 版的实际 exe 名可能不同（如 Codex Store 版实际是 `ChatGPT.exe`）。
+3. **桌面 EXE 版的安装路径和安装器类型**：假设为 NSIS per-user 安装到 `%LOCALAPPDATA%\Programs\DoubaoWork\`，需确认是否为 Squirrel 模式（带 `app-x.y.z` 版本子目录）。
+4. **Windows 版豆包工作的页面 URL scheme**：macOS 版使用 `doubaowork:` / `chrome:` protocol，Windows 版应一致，但需验证。
+5. **是否需要支持 ARM64 Windows**：Node.js 提供 win-arm64 构建，但豆包工作 Windows 版是否有 ARM64 版本未知。第一阶段仅支持 x64。
+6. **Store 版的 PackageFamilyName 和 ApplicationId**：需要从 `Get-AppxPackage` 实际获取，当前假设包名含 `doubao` 或 `春田`，需真机确认精确值。
 
 ---
 
@@ -791,13 +909,19 @@ test/screenshots.test.mjs # 跨平台
 
 ## 10. 总结
 
-本方案通过引入 `src/platform/` 平台抽象层，将 macOS 特定逻辑与核心换肤逻辑分离。Windows 适配的核心工作量集中在：
+本方案通过引入 `src/platform/` 平台抽象层，将 macOS 特定逻辑与核心换肤逻辑分离。Windows 适配的核心设计决策：
 
-1. **进程与端口管理**（netstat/tasklist/taskkill 替代 ps/lsof/pgrep）
-2. **安装入口**（PowerShell + cmd 替代 zsh .command）
-3. **路径与权限**（%APPDATA% 替代 ~/Library，跳过 chmod）
-4. **桌面快捷方式**（.lnk 替代 symlink）
+1. **应用定位三级策略**：运行中进程反查（最准确）→ Store 包探测（`Get-AppxPackage`）→ 桌面路径遍历；多版本共存时桌面版优先
+2. **应用启动双轨制**：桌面版直接 spawn exe；Store 版用 `IApplicationActivationManager` COM 接口激活，启动后验证 CDP 端口，不生效则回退直接启动并提示用户
+3. **启动后必须验证 CDP**：不假设 `--remote-debugging-port` 一定生效（Store 应用可能吃掉参数），端口验证是唯一成功判据
+4. **进程与端口管理**：`Get-NetTCPConnection` + `Get-CimInstance Win32_Process` 替代 `netstat`/`tasklist`/`wmic`，结构化输出更可靠
+5. **安装入口**：PowerShell `.ps1` + `.cmd` wrapper（`-ExecutionPolicy Bypass`）替代 zsh `.command`
+6. **数据目录**：`%LOCALAPPDATA%\DoubaoWorkSkin`（Local，不漫游，因 engine 含 Node.js 二进制）
+7. **桌面快捷方式**：`.lnk`（PowerShell COM `WScript.Shell`）替代 symlink
+8. **进程终止**：`taskkill /PID N`（优雅）→ `taskkill /PID N /F /T`（强制进程树），替代 POSIX 信号
 
 核心换肤逻辑（CDP 注入、主题加载、CSS 构建、状态管理）完全复用，预计代码复用率 > 80%。
+
+参考项目：Codex Dream Skin（GitHub 11k+ stars，同类 CDP 换肤工具，已解决 Store 应用启动与 CDP 参数兼容性问题）。
 
 建议按 Phase 1 → 2 → 3 → 4 顺序实施，每个 Phase 结束后运行全量测试确保 macOS 行为不受影响。
