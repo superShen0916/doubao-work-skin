@@ -6,12 +6,13 @@
  */
 
 import * as darwin from "./darwin.mjs";
+import * as win32 from "./win32.mjs";
 
-const implementations = { darwin };
+const implementations = { darwin, win32 };
 const platform = process.platform;
 
 if (!implementations[platform]) {
-  throw new Error(`不支持的操作系统: ${platform}；目前支持 macOS（Windows 支持开发中）`);
+  throw new Error(`不支持的操作系统: ${platform}；目前支持 macOS 和 Windows`);
 }
 
 export const {
