@@ -160,36 +160,92 @@ async function defaultInspectProcess(pid) {
   return platformInspectProcess(pid);
 }
 
+// 解析命令行字符串为参数数组，正确处理 Windows/Unix 风格的引号包裹
+function parseCommandLineArgs(cmdLine) {
+  const args = [];
+  let current = "";
+  let inQuotes = false;
+  let quoteChar = null;
+  for (let i = 0; i < cmdLine.length; i++) {
+    const ch = cmdLine[i];
+    if (inQuotes) {
+      if (ch === quoteChar) {
+        // Windows: "" 表示转义的引号
+        if (quoteChar === '"' && cmdLine[i + 1] === '"') {
+          current += '"';
+          i++;
+        } else {
+          inQuotes = false;
+          quoteChar = null;
+        }
+      } else {
+        current += ch;
+      }
+    } else if (ch === '"' || ch === "'") {
+      inQuotes = true;
+      quoteChar = ch;
+    } else if (ch === " " || ch === "\t") {
+      if (current) {
+        args.push(current);
+        current = "";
+      }
+    } else {
+      current += ch;
+    }
+  }
+  if (current) args.push(current);
+  return args;
+}
+
 function parseWatchCommand(command, { injectorPath, cwd }) {
   const source = String(command || "").trim();
-  const absoluteInjector = path.resolve(injectorPath);
-  const candidates = [absoluteInjector];
-  if (cwd) candidates.push(path.relative(cwd, absoluteInjector));
-  let injectorToken = null;
+  if (!source) return null;
+  const pathMod = pathFor(injectorPath);
+  const absoluteInjector = pathMod.resolve(injectorPath);
+  const candidates = [absoluteInjector, injectorPath];
+  if (cwd) {
+    candidates.push(pathMod.relative(cwd, absoluteInjector));
+    candidates.push(pathMod.relative(cwd, injectorPath));
+  }
   let injectorIndex = -1;
+  let injectorToken = null;
   for (const candidate of candidates) {
+    if (!candidate) continue;
     const index = source.indexOf(candidate);
     if (index >= 0 && (injectorIndex < 0 || index < injectorIndex)) {
-      injectorToken = candidate;
       injectorIndex = index;
+      injectorToken = candidate;
     }
   }
   if (injectorIndex < 0) return null;
-  // 可执行文件路径：去除首尾引号（Windows 含空格路径会被引号包裹）
-  const executable = source.slice(0, injectorIndex).trim().replace(/^["']|["']$/g, "");
+  // 截取可执行文件路径：处理 injector 前面的引号（Windows 风格）
+  // macOS ps 输出不含引号但路径可能含空格；Windows 命令行含空格路径会被引号包裹
+  let beforeInjector = source.slice(0, injectorIndex).trimEnd();
+  // 如果 injector 前面是引号（Windows 风格中 injector 的开引号），去掉它
+  if (beforeInjector.endsWith('"') || beforeInjector.endsWith("'")) {
+    beforeInjector = beforeInjector.slice(0, -1).trimEnd();
+  }
+  // 去除可执行文件路径自身的首尾引号
+  const executable = beforeInjector.trim().replace(/^["']|["']$/g, "");
   // 用正则匹配 node/node.exe，不依赖 path.basename（跨平台行为不一致）
   if (!/[\\/]node(\.exe)?$/i.test(executable)) return null;
-  const tokens = source.slice(injectorIndex + injectorToken.length).trim().split(/\s+/);
-  const watchIndex = tokens.indexOf("--watch");
-  const portIndex = tokens.indexOf("--port");
-  const skinIndex = tokens.indexOf("--skin");
-  if (watchIndex < 0 || portIndex < 0 || skinIndex < 0) return null;
+  // 从原始字符串中提取参数值（能处理含空格的路径，macOS ps 输出不含引号）
+  const rest = source.slice(injectorIndex + injectorToken.length);
+  const portMatch = rest.match(/--port\s+(\d+)/);
+  const skinMatch = rest.match(/--skin\s+(.+?)(?=\s+--(?:port|watch|timeout-ms)\b|$)/);
+  if (!rest.includes("--watch") || !portMatch || !skinMatch) return null;
+  // 去除 skinDir 的首尾引号（Windows 风格）
+  const skinDir = skinMatch[1].trim().replace(/^["']|["']$/g, "");
   return {
     injectorToken,
-    port: Number(tokens[portIndex + 1]),
-    skinDir: source.slice(injectorIndex + injectorToken.length).trim()
-      .match(/(?:^|\s)--skin\s+(.+?)(?=\s+--(?:port|watch|timeout-ms)\b|$)/)?.[1] || null,
+    port: Number(portMatch[1]),
+    skinDir,
   };
+}
+
+// 根据路径格式选择 posix 或 win32 的 path 实现（跨平台测试时需要）
+function pathFor(p) {
+  return (/^[A-Z]:[\\/]/i.test(p) || p.includes("\\")) ? path.win32 : path;
 }
 
 export async function inspectWatchProcess(pid, {
@@ -204,16 +260,17 @@ export async function inspectWatchProcess(pid, {
   } catch {
     return null;
   }
-  const cwd = info.cwd ? path.resolve(info.cwd) : null;
+  const pathMod = pathFor(injectorPath);
+  const cwd = info.cwd ? pathMod.resolve(info.cwd) : null;
   const parsed = parseWatchCommand(info.command, { injectorPath, cwd });
   if (!parsed) return null;
-  const resolvedInjector = path.isAbsolute(parsed.injectorToken)
-    ? path.resolve(parsed.injectorToken)
+  const resolvedInjector = pathMod.isAbsolute(parsed.injectorToken)
+    ? pathMod.resolve(parsed.injectorToken)
     : cwd
-      ? path.resolve(cwd, parsed.injectorToken)
+      ? pathMod.resolve(cwd, parsed.injectorToken)
       : null;
-  if (resolvedInjector !== path.resolve(injectorPath)) return null;
-  if (cwd && cwd !== path.resolve(projectRoot)) return null;
+  if (resolvedInjector !== pathMod.resolve(injectorPath)) return null;
+  if (cwd && cwd !== pathMod.resolve(projectRoot)) return null;
   return { pid: numericPid, command: info.command, cwd, port: parsed.port, skinDir: parsed.skinDir };
 }
 

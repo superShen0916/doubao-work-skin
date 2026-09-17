@@ -136,6 +136,24 @@ test("安装版 watch 能识别带空格的程序路径和个人皮肤路径", a
   assert.equal(entry.port, 9342);
 });
 
+test("Windows watch 能识别双引号包裹的含空格路径", async () => {
+  const projectRoot = "C:\\Users\\Test User\\AppData\\Local\\DoubaoWorkSkin\\engine";
+  const injectorPath = `${projectRoot}\\src\\injector.mjs`;
+  const skinDir = "C:\\Users\\Test User\\AppData\\Local\\DoubaoWorkSkin\\skins\\my-garden";
+  const nodePath = `${projectRoot}\\runtime\\node.exe`;
+  const entry = await inspectWatchProcess(9, {
+    projectRoot,
+    injectorPath,
+    inspectProcess: async () => ({
+      command: `"${nodePath}" "${injectorPath}" --watch --port 9342 --skin "${skinDir}"`,
+      cwd: projectRoot,
+    }),
+  });
+  assert.ok(entry, "应识别为 watch 进程");
+  assert.equal(entry.skinDir, skinDir);
+  assert.equal(entry.port, 9342);
+});
+
 test("端口选择跳过已占用端口", async () => {
   const occupied = new Set([9342, 9343]);
   assert.equal(await selectAvailablePort(9342, { isPortListening: async (port) => occupied.has(port) }), 9344);

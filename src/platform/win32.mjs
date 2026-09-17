@@ -172,30 +172,31 @@ export async function discoverAppInstall() {
 async function launchStoreApp(install, port) {
   // Store 应用：用 IApplicationActivationManager 激活
   // 参考 Codex Dream Skin 的实现
+  // 注意：PowerShell here-string 的结束标记 "@ 必须在行首，不能缩进，否则 5.1 语法错误
   const script = `
-    $ErrorActionPreference = 'Stop'
-    Add-Type -TypeDefinition @"
-    using System;
-    using System.Runtime.InteropServices;
-    public static class AppActivator {
-        [ComImport, Guid("2e941141-7f97-4756-ba1d-9decde894a3d"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-        public interface IApplicationActivationManager {
-            int ActivateApplication(string appUserModelId, string arguments, uint options, out uint processId);
-            int ActivateForFile(string appUserModelId, IntPtr itemArray, string verb, out uint processId);
-            int ActivateForProtocol(string appUserModelId, IntPtr itemArray, out uint processId);
-        }
-        [ComImport, Guid("45BA127D-10A8-46EA-8AB7-56EA9078943C")]
-        public class ApplicationActivationManager { }
+$ErrorActionPreference = 'Stop'
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public static class AppActivator {
+    [ComImport, Guid("2e941141-7f97-4756-ba1d-9decde894a3d"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    public interface IApplicationActivationManager {
+        int ActivateApplication(string appUserModelId, string arguments, uint options, out uint processId);
+        int ActivateForFile(string appUserModelId, IntPtr itemArray, string verb, out uint processId);
+        int ActivateForProtocol(string appUserModelId, IntPtr itemArray, out uint processId);
     }
+    [ComImport, Guid("45BA127D-10A8-46EA-8AB7-56EA9078943C")]
+    public class ApplicationActivationManager { }
+}
 "@
-    $mgr = New-Object AppActivator+ApplicationActivationManager
-    $am = [AppActivator+IApplicationActivationManager]$mgr
-    $launchArgs = "--remote-debugging-address=127.0.0.1 --remote-debugging-port=${port}"
-    $procId = [uint32]0
-    $hr = $am.ActivateApplication("${install.appUserModelId}", $launchArgs, 0, [ref]$procId)
-    if ($hr -ne 0) { throw "ActivateApplication failed: 0x$('{0:X8}' -f $hr)" }
-    $procId
-  `;
+$mgr = New-Object AppActivator+ApplicationActivationManager
+$am = [AppActivator+IApplicationActivationManager]$mgr
+$launchArgs = "--remote-debugging-address=127.0.0.1 --remote-debugging-port=${port}"
+$procId = [uint32]0
+$hr = $am.ActivateApplication("${install.appUserModelId}", $launchArgs, 0, [ref]$procId)
+if ($hr -ne 0) { throw "ActivateApplication failed: 0x$('{0:X8}' -f $hr)" }
+$procId
+`;
   try {
     const output = await runPowerShell(script, { timeout: 15_000 });
     const pid = Number(output);

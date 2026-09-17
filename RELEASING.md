@@ -17,21 +17,22 @@ npm run verify:release
 
 | 产物 | 用途 |
 | --- | --- |
-| `DoubaoWorkSkin-<版本>-macos-scripts.zip` | Apple 芯片和 Intel 共用的安装包 |
+| `DoubaoWorkSkin-<版本>-macos-scripts.zip` | Apple 芯片和 Intel 共用的 macOS 安装包 |
+| `DoubaoWorkSkin-<版本>-windows-scripts.zip` | Windows 安装包 |
 | `doubao-work-skin-<版本>-skill.zip` | 带 `SKILL.md` 和 `assets/project/` 完整运行资源的技能包 |
-| 两个同名 `.zip.sha256` 文件 | 对应 ZIP 的 SHA-256 校验和 |
+| 三个同名 `.zip.sha256` 文件 | 对应 ZIP 的 SHA-256 校验和 |
 
 ZIP 保留启动文件的执行权限，包含安装和运行所需程序与皮肤，不包含 Node.js 二进制、本机状态、日志、截图、测试或完整开发脚本。Node.js 在首次安装时下载。Skill 中的程序和 AGENTS.md 从同一份发布内容复制，不另行维护。
 
-GitHub Actions 的 **Build script package** 可手动生成两种下载包供检查，不公开发布。**Release** 工作流在推送正式版本 tag 时自动完成测试、打包、校验和发布。修改代码或文档后重新打包；不要沿用旧 ZIP。`dist/` 和可选的 `.build/` 是可清理的本地产物目录，不提交到源码仓库。
+GitHub Actions 的 **Build script package** 可手动生成三种下载包供检查，不公开发布。**Release** 工作流在推送正式版本 tag 时自动完成测试、打包、校验和发布。修改代码或文档后重新打包；不要沿用旧 ZIP。`dist/` 和可选的 `.build/` 是可清理的本地产物目录，不提交到源码仓库。
 
 ## 自动发布正式版本
 
 1. 完成本次变更所需的验收，将 `package.json` 更新为新的版本号，并新增 `docs/releases/v<版本>.md`，记录变更、老用户更新方式和实际验收范围。已有验收结果可以沿用，不将自动化检查写成未执行过的客户端验收。
 2. 提交并推送到 `main`，确认 CI 通过。
 3. 在该提交上创建 `v<版本>` tag 并推送，例如 `git tag -a v2.2.2 -m 'Release v2.2.2'`、`git push origin v2.2.2`。普通分支 push 只跑 CI，不会发版。
-4. **Release** 工作流验证 tag 与包版本一致、发布说明存在，分别使用 Node.js 22 / 24 运行检查与测试，然后构建两种 ZIP 并校验完整文件清单、源码一致性、执行权限、CRC 和 SHA-256。
-5. 工作流先创建草稿并上传四个附件，重新下载校验成功后才将 Release 公开并标记为最新版本。完成后确认 Release 页面及 Actions 结果。
+4. **Release** 工作流验证 tag 与包版本一致、发布说明存在，分别使用 Node.js 22 / 24 运行检查与测试，然后构建三种 ZIP 并校验完整文件清单、源码一致性、执行权限、CRC 和 SHA-256。
+5. 工作流先创建草稿并上传六个附件（三个 ZIP + 三个 sha256），重新下载校验成功后才将 Release 公开并标记为最新版本。完成后确认 Release 页面及 Actions 结果。
 
 上传或校验失败会保留草稿，可在 Actions 中重跑失败任务。已公开版本不会被覆盖；如需修改，使用新的版本号和 tag。工作流使用仓库自带的 `GITHUB_TOKEN`，仅发布任务申请 `contents: write`，无需额外保存个人令牌。
 
