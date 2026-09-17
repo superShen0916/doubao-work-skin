@@ -120,7 +120,7 @@
   box-shadow: 0 0 0 3px rgba(24, 163, 210, .12), 0 20px 48px rgba(28, 78, 104, .22), inset 0 1px rgba(255, 255, 255, .90) !important;
 }
 
-div[class*="flex-col-reverse"][class*="input-guidance"] > *:not([data-testid="chat_input"]),
+div[class*="flex-col-reverse"][class*="input-guidance"] > *:not([data-testid="chat_input"]):not([class~="z-[-1]"]),
 #chat-route-main :has(> [data-testid="queue-message-list"]) {
   color: #1a3648 !important;
   background: rgba(244, 251, 253, .95) !important;
@@ -169,8 +169,6 @@ div[class*="flex-col-reverse"][class*="input-guidance"] > *:not([data-testid="ch
   background: rgba(248, 252, 254, .97) !important;
   border: 1px solid rgba(44, 96, 123, .20) !important;
   box-shadow: 0 26px 64px rgba(27, 69, 92, .22), inset 0 1px rgba(255, 255, 255, .76) !important;
-  backdrop-filter: blur(22px) saturate(108%) !important;
-  -webkit-backdrop-filter: blur(22px) saturate(108%) !important;
 }
 
 [data-testid="right-panel-container"],

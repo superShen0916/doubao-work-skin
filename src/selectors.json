@@ -176,6 +176,14 @@
       "notes": "输入器外层；内层白底由 > .guidance-input-surface 处理。"
     },
     {
+      "key": "chat-input-decoration",
+      "selector": "div[class*=\"flex-col-reverse\"][class*=\"input-guidance\"] > [class~=\"z-[-1]\"]",
+      "tier": "L2",
+      "scope": "workspace",
+      "required": false,
+      "notes": "输入框顶部原生装饰层；运行状态条及 chat_input 兄弟元素规则需排除此层和其后代，避免误加背景、边框与阴影。由合成页面回归覆盖，真实客户端兼容性需另行验证。"
+    },
+    {
       "key": "chat-input-surface",
       "selector": "[data-testid=\"chat_input\"] > .guidance-input-surface",
       "tier": "L1",
@@ -277,7 +285,7 @@
       "tier": "L2",
       "scope": "overlay",
       "required": false,
-      "notes": "Radix 菜单/弹层；使用 role=menu 和 popper 包装器兜底。"
+      "notes": "Radix 菜单/弹层；使用 role=menu 和 popper 包装器兜底。菜单不使用 backdrop-filter，以免建立固定定位包含块后使嵌套子菜单被父菜单 overflow 裁剪。"
     },
     {
       "key": "dialog-overlay",
