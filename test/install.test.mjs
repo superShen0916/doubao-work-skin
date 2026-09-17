@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { install, launcherScripts } from "../scripts/install.mjs";
 
 const exec = promisify(execFile);
@@ -64,6 +64,45 @@ test("候选程序检查失败不会替换旧程序或清除用户数据", async
     assert.equal(await fs.readFile(path.join(first.engine, "skin.mjs"), "utf8"), "fixture");
     assert.equal(await fs.readFile(path.join(first.skinsDir, "sample/theme.json"), "utf8"), "original");
     assert.ok(!(await fs.readdir(options.dataRoot)).includes(".install-lock"));
+  });
+});
+
+test("旧安装升级后兼容个人 CSS，保留背景、配色、专属样式及偏好文件", async () => {
+  await fixture(async options => {
+    const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+    for (const name of ["theme.mjs", "theme-compat.mjs", "base.css"]) {
+      await fs.copyFile(path.join(root, "src", name), path.join(options.projectRoot, "src", name));
+    }
+    await fs.writeFile(path.join(options.projectRoot, "package.json"), '{"version":"2.2.1","type":"module"}');
+    const first = await install(options);
+    const config = JSON.parse(await fs.readFile(path.join(root, "skins/seaside-breeze/theme.json"), "utf8"));
+    config.id = "sample";
+    config.name = "我的定制海风";
+    config.colors.accent = "#123456";
+    const personal = path.join(first.skinsDir, "sample");
+    const legacy = await fs.readFile(path.join(root, "test/fixtures/legacy-theme.css"), "utf8");
+    const originals = {
+      "theme.json": JSON.stringify(config),
+      "background.png": "personal background bytes",
+      "skin.css": legacy,
+    };
+    for (const [name, content] of Object.entries(originals)) await fs.writeFile(path.join(personal, name), content);
+    const preferences = '{"lastTheme":"sample"}';
+    await fs.writeFile(path.join(first.dataRoot, "preferences.json"), preferences);
+    await fs.writeFile(path.join(options.projectRoot, "package.json"), '{"version":"2.2.2","type":"module"}');
+    await install(options);
+    await install(options);
+    const { loadTheme } = await import(pathToFileURL(path.join(first.engine, "src/theme.mjs")));
+    const loaded = await loadTheme({ skinDir: personal });
+    assert.equal(loaded.skinCss, legacy);
+    assert.equal(loaded.theme.colors.accent, "#123456");
+    assert.ok(loaded.finalCss.includes(':not([class~="z-[-1]"])'));
+    assert.ok(loaded.finalCss.lastIndexOf("backdrop-filter: none") > loaded.finalCss.lastIndexOf("backdrop-filter: blur"));
+    assert.ok(loaded.finalCss.includes("#personal-card { color: rgb(123, 45, 67); border-radius: 23px; }"));
+    assert.ok(loaded.finalCss.includes("换肤 v2.2.2"));
+    for (const [name, content] of Object.entries(originals)) assert.equal(await fs.readFile(path.join(personal, name), "utf8"), content);
+    assert.equal(await fs.readFile(path.join(first.dataRoot, "preferences.json"), "utf8"), preferences);
+    assert.ok(!(await fs.readdir(options.dataRoot)).some(name => name.startsWith(".engine-") || name === ".install-lock"));
   });
 });
 

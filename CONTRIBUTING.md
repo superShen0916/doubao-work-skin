@@ -15,6 +15,8 @@ npm test
 
 样式回归测试使用本机 Chrome 和独立的临时 profile，覆盖所有内置主题的输入框装饰层、运行状态条及嵌套子菜单。可用 `DWS_TEST_BROWSER` 指定 Chromium 可执行文件；本地没有 Chrome 时明确跳过此项，CI 缺少浏览器时失败。设置 `DWS_TEST_ARTIFACTS=.build/css-browser` 可保留合成测试页和截图。
 
+旧主题兼容在 `src/theme-compat.mjs` 和 CSS 组装阶段完成，不改写个人文件。浏览器测试同时覆盖旧规则、自定义颜色与圆角、弹窗毛玻璃；安装测试在临时目录验证重复升级后个人文件及偏好保持不变。新增兼容规则应继续遵守这一边界。
+
 共享样式 `src/base.css` 有字节级回归检查。主动修改该文件后，应先审阅样式差异并验证界面，再同步 `test/fixtures/final-css-sha256.json` 中的 SHA-256 和 UTF-8 解码后字符串长度（JavaScript `String.length`）；不要只为消除测试失败而更新摘要。
 
 修改注入器、选择器或主题后，请使用无敏感内容的测试对话验证：新建对话、收发消息、代码块和表格、左侧导航、右侧预览、菜单与弹窗、键盘焦点、窗口缩放、页面刷新、主题切换，以及 `stop` 后的恢复效果。记录 macOS、Node.js 和豆包工作版本。

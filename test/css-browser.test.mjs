@@ -41,7 +41,7 @@ function checkStyles(themes) {
   document.head.append(style);
   const byId = id => document.getElementById(id);
   const check = (condition, message) => { if (!condition) failures.push(message); };
-  for (const { id, css } of themes) {
+  for (const { id, css, legacy } of themes) {
     style.textContent = css;
     const label = message => `${id}: ${message}`;
     for (const decoration of document.querySelectorAll(".decoration")) {
@@ -55,6 +55,11 @@ function checkStyles(themes) {
     check(status.backgroundColor !== "rgba(0, 0, 0, 0)", label("真实运行状态条应保留背景"));
     check(status.borderTopWidth === "1px", label("真实运行状态条应保留边框"));
     check(getComputedStyle(byId("status-button")).borderRadius === "8px", label("状态条按钮应保留样式"));
+    if (legacy) {
+      check(getComputedStyle(byId("personal-card")).color === "rgb(123, 45, 67)", label("用户定制颜色应保留"));
+      check(getComputedStyle(byId("personal-card")).borderRadius === "23px", label("用户定制圆角应保留"));
+      check(getComputedStyle(byId("dialog")).backdropFilter.includes("blur("), label("弹窗毛玻璃应保留"));
+    }
     for (const id of ["menu", "submenu", "wrapped-menu"]) {
       check(getComputedStyle(byId(id)).backdropFilter === "none", label(`${id} 不应建立 backdrop-filter 包含块`));
     }
@@ -82,9 +87,11 @@ test("浏览器验证全部主题：装饰层隔离、运行状态条与嵌套�
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "dws-css-browser-"));
   try {
     const themes = [];
+    const legacyCss = await fs.readFile(new URL("fixtures/legacy-theme.css", import.meta.url), "utf8");
     for (const name of await discoverThemes()) {
       const theme = await loadTheme({ name });
       themes.push({ id: name, css: buildThemeCss({ ...theme, backgroundDataUrl: null }) });
+      themes.push({ id: `legacy-${name}`, legacy: true, css: buildThemeCss({ ...theme, backgroundDataUrl: null, skinCss: legacyCss }) });
     }
     const html = `<!doctype html><html><head><meta charset="utf-8"><style>
       body { margin: 0; }
@@ -106,6 +113,7 @@ test("浏览器验证全部主题：装饰层隔离、运行状态条与嵌套�
         <div id="status">正在生成 <button id="status-button">停止</button></div>
       </div></div>
       <pre id="result"></pre>
+      <div id="personal-card"></div><div id="dialog" role="dialog" style="position:fixed;left:800px;top:400px"></div>
       <script>(${checkStyles.toString()})(${JSON.stringify(themes).replaceAll("<", "\\u003c")})</script>
     </body></html>`;
     const file = path.join(directory, "fixture.html");

@@ -3,6 +3,7 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import pkg from "../package.json" with { type: "json" };
+import { compatibleThemeCss, MENU_COMPAT_CSS } from "./theme-compat.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const SKIN_VERSION = pkg.version;
@@ -174,7 +175,7 @@ ${variableLines}
 export function buildThemeCss(themePackage, { skinVersion = SKIN_VERSION } = {}) {
   const prefix = buildVariableCss(themePackage.theme, themePackage.backgroundDataUrl, skinVersion);
   let css = `${prefix}\n/* === 皮肤精确选择器 CSS === */\n${themePackage.baseCss}\n`;
-  if (themePackage.skinCss) css += `\n/* === 主题专属 CSS === */\n${themePackage.skinCss}\n`;
+  if (themePackage.skinCss) css += `\n/* === 主题专属 CSS === */\n${compatibleThemeCss(themePackage.skinCss)}\n${MENU_COMPAT_CSS}`;
   return css;
 }
 

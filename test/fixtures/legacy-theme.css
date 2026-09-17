@@ -1,0 +1,23 @@
+/* v2.2.1 内置主题中触发两处问题的原始规则，保留用于升级回归。 */
+div[class*="flex-col-reverse"][class*="input-guidance"] > *:not([data-testid="chat_input"]),
+#chat-route-main :has(> [data-testid="queue-message-list"]) {
+  color: #2a3a3a !important;
+  background: rgba(247, 245, 239, .95) !important;
+  border: 1px solid rgba(91, 168, 160, .18) !important;
+  border-radius: 14px !important;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .12) !important;
+}
+
+[role="menu"],
+[role="dialog"],
+[data-radix-popper-content-wrapper] > * {
+  color: #2a3a3a !important;
+  background: rgba(247, 245, 239, .97) !important;
+  border: 1px solid rgba(91, 168, 160, .20) !important;
+  box-shadow: 0 26px 64px rgba(0, 0, 0, .18), inset 0 1px rgba(255, 255, 255, .78) !important;
+  backdrop-filter: blur(23px) saturate(108%) !important;
+  -webkit-backdrop-filter: blur(23px) saturate(108%) !important;
+}
+
+/* 模拟用户额外定制，应保持不变。 */
+#personal-card { color: rgb(123, 45, 67); border-radius: 23px; }
