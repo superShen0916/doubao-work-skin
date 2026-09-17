@@ -1,12 +1,16 @@
 # Doubao Work Skin
 
-为 macOS「豆包工作」桌面端提供 13 套皮肤，支持通过 Agent 切换和定制。输入框发送按钮等控件自动适配各主题强调色。主题以临时样式注入，不修改应用安装包，可恢复官方外观。
+为「豆包工作」桌面端提供 13 套皮肤，支持 macOS 和 Windows，可通过 Agent 切换和定制。输入框发送按钮等控件自动适配各主题强调色。主题以临时样式注入，不修改应用安装包，可恢复官方外观。
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
 ## 快速开始
 
-需要 **macOS 13.5 或更新版本**（Apple 芯片或 Intel），豆包工作安装在 `/Applications/DoubaoWork.app`。安装器会自动准备专用运行环境，无需预先安装 Node.js、Git 或 Homebrew。
+**macOS**：需要 macOS 13.5 或更新版本（Apple 芯片或 Intel），豆包工作安装在 `/Applications/DoubaoWork.app`。
+
+**Windows**：需要 Windows 10 1809 或更新版本（x64），支持桌面 EXE 版和 Microsoft Store 版豆包工作。桌面版对调试参数支持最可靠，Store 版会自动尝试兼容启动。
+
+安装器会自动准备专用运行环境，无需预先安装 Node.js、Git 或其他开发工具。
 
 将下面这段话发送给能够操作本机的豆包工作：
 
@@ -37,13 +41,21 @@
 
 ### 手动安装
 
+**macOS：**
+
 1. 从 [GitHub Releases](https://github.com/superShen0916/doubao-work-skin/releases) 下载 `DoubaoWorkSkin-<版本>-macos-scripts.zip`，或下载本仓库源码 ZIP，完整解压。
 2. 双击 **`安装皮肤.command`**，等待安装完成。首次安装需要联网，安装过程不会退出豆包工作。
-3. 双击桌面“豆包工作皮肤”文件夹中的 **`启动豆包工作.command`**。需要重启时，先保存工作并等待当前 Agent 任务结束，再输入 `y` 确认。
+3. 双击桌面"豆包工作皮肤"文件夹中的 **`启动豆包工作.command`**。需要重启时，先保存工作并等待当前 Agent 任务结束，再输入 `y` 确认。
 
-首次启动默认使用「海风微语」。安装完成后，原始下载目录可以移动或删除。macOS 或公司设备策略可能要求额外确认或限制脚本运行。
+**Windows：**
 
-若桌面入口未创建成功，可在 Finder 中选择“前往 → 前往文件夹”，打开 `~/Library/Application Support/DoubaoWorkSkin/启动入口/`。这里有相同的启动、恢复和复制提示词文件。
+1. 从 [GitHub Releases](https://github.com/superShen0916/doubao-work-skin/releases) 下载 `DoubaoWorkSkin-<版本>-windows-scripts.zip`，完整解压。
+2. 双击 **`安装皮肤.cmd`**，等待安装完成。首次安装需要联网下载专用 Node.js 运行环境。
+3. 双击桌面"豆包工作皮肤"文件夹中的 **`启动豆包工作.cmd`**。需要重启时，先保存工作并等待当前 Agent 任务结束。
+
+首次启动默认使用「海风微语」。安装完成后，原始下载目录可以移动或删除。
+
+若桌面入口未创建成功，macOS 可在 Finder 中选择"前往 → 前往文件夹"，打开 `~/Library/Application Support/DoubaoWorkSkin/启动入口/`；Windows 可在资源管理器地址栏输入 `%LOCALAPPDATA%\DoubaoWorkSkin\启动入口\`。
 
 ### 可选：Skill
 
@@ -176,7 +188,7 @@ node skin.mjs restore           # 停止守护、恢复外观并清除状态
 
 **支持 Windows 或 Linux 吗？**
 
-暂不支持，目前仅适配 macOS 桌面端。
+支持 Windows 10 1809+（x64），包括桌面 EXE 版和 Microsoft Store 版豆包工作。Linux 暂不支持。
 
 ## 开发与贡献
 
@@ -185,7 +197,7 @@ npm run check   # 语法、JSON、主题配置与资源检查
 npm test        # 行为与失败路径回归测试
 ```
 
-CI 使用 macOS + Node.js 22 / 24，测试不连接真实应用。
+CI 使用 macOS + Windows，Node.js 22 / 24，测试不连接真实应用。
 
 | 文档 | 用途 |
 | --- | --- |

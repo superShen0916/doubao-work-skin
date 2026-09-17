@@ -1,14 +1,20 @@
 # Agent 操作指南
 
-本指南适用于在用户 Mac 上安装、切换、制作和恢复豆包工作皮肤的 Agent。需要本机文件与命令执行权限；云端沙箱不能操作用户电脑上的应用。
+本指南适用于在用户 Mac 或 Windows PC 上安装、切换、制作和恢复豆包工作皮肤的 Agent。需要本机文件与命令执行权限；云端沙箱不能操作用户电脑上的应用。
 
 用户请求阅读、审查或修改本仓库时，只进行对应的开发工作，不安装工具、不切换皮肤。开发与测试规则见 [CONTRIBUTING.md](./CONTRIBUTING.md)。安装版的补充文档位于用户数据目录内的 `engine/`；该目录仅供读取，不在其中开发或制作个人皮肤。
+
+## 平台支持
+
+- **macOS**：13.5+，Apple 芯片或 Intel，应用路径 `/Applications/DoubaoWork.app`
+- **Windows**：10 1809+（x64），支持桌面 EXE 版和 Microsoft Store 版；桌面版优先，Store 版自动兼容
+- 数据目录：macOS 为 `~/Library/Application Support/DoubaoWorkSkin`，Windows 为 `%LOCALAPPDATA%\DoubaoWorkSkin`
 
 ## 安装与环境准备
 
 接受仓库链接或本地项目目录作为入口。对于安装或换肤请求，按需完成环境准备；仅查询项目信息时不执行安装。
 
-1. 确认能在用户本机执行命令，系统为 macOS ≥ 13.5，且存在 `/Applications/DoubaoWork.app`。如果只有网页阅读或云端沙箱能力，说明无法操作本机，并给出 README 中的双击安装步骤；不要把云端下载或执行当作本机安装。
+1. 确认能在用户本机执行命令。macOS 需要系统 ≥ 13.5 且存在 `/Applications/DoubaoWork.app`；Windows 需要系统 ≥ 10 1809（x64），支持桌面 EXE 版或 Microsoft Store 版豆包工作。如果只有网页阅读或云端沙箱能力，说明无法操作本机，并给出 README 中的双击安装步骤；不要把云端下载或执行当作本机安装。
 2. 先检查本机 `~/Library/Application Support/DoubaoWorkSkin/AGENTS.md` 和同目录的 `skin` 是否存在。已安装且未请求更新时，读取该说明后直接执行换肤，无需下载或安装；当前已在阅读安装版说明时不循环读取。请求更新时继续获取指定版本。入口缺失或执行失败时先诊断具体问题，不删除个人皮肤或将重装作为默认修复方式。
 3. 未安装且已有完整本地项目时，直接使用它。只有 GitHub 链接时，从用户给出的仓库页面获取实际下载地址：优先使用该仓库正式 Release 中的 `DoubaoWorkSkin-<版本>-macos-scripts.zip`，并核对随包 `.sha256`；没有脚本发布包时，下载该仓库默认分支的源码 ZIP。用户指定版本或分支时以其选择为准，不静默换成其他版本。不要猜仓库地址、分支名或发布文件 URL。
 4. 在独立的本地临时目录中下载并完整解压，可用 macOS 自带的 `/usr/bin/curl` 和 `/usr/bin/ditto -x -k`，无需安装 Git、Python 或 Homebrew。curl 应使用 HTTPS、跟随重定向并在 HTTP 错误时失败（如 `--fail --location --proto '=https' --proto-redir '=https'`）。从解压结果定位包含 `AGENTS.md`、`安装皮肤.command`、`scripts/install.mjs`、`skin.mjs`、`package.json`、`src/` 和 `skins/` 的项目根目录；不要依赖 ZIP 顶层目录名，也不要只下载一个脚本。校验失败或文件不全时停止，报告具体原因。
@@ -19,7 +25,7 @@
 
 ## 执行安装
 
-普通用户不需要开发环境。拿到完整项目目录后，执行 `/bin/zsh ./安装皮肤.command`，由脚本从 Node.js 官方下载固定版本、校验摘要并安装到用户目录。无需 `npm install`、Homebrew、Git 或管理员权限。首次安装需要网络，安装本身不会退出豆包工作。
+普通用户不需要开发环境。拿到完整项目目录后，macOS 执行 `/bin/zsh ./安装皮肤.command`，Windows 执行 `安装皮肤.cmd`（内部调用 PowerShell）。脚本从 Node.js 官方下载固定版本、校验摘要并安装到用户目录。无需 `npm install`、Homebrew、Git 或管理员权限。首次安装需要网络，安装本身不会退出豆包工作。
 
 成功后优先阅读 `~/Library/Application Support/DoubaoWorkSkin/AGENTS.md` 并使用其中的固定命令入口，不再依赖下载目录。需要启用或重启时，让用户保存工作、等待当前任务结束，再双击桌面“豆包工作皮肤”内的启动文件。不要替用户运行带重启确认的快捷入口。
 
@@ -29,10 +35,18 @@
 
 安装版使用固定命令入口，例如：
 
+macOS：
 ```sh
 "$HOME/Library/Application Support/DoubaoWorkSkin/skin" list
 "$HOME/Library/Application Support/DoubaoWorkSkin/skin" start sunlit-atelier
 "$HOME/Library/Application Support/DoubaoWorkSkin/skin" verify sunlit-atelier
+```
+
+Windows：
+```cmd
+"%LOCALAPPDATA%\DoubaoWorkSkin\skin.cmd" list
+"%LOCALAPPDATA%\DoubaoWorkSkin\skin.cmd" start sunlit-atelier
+"%LOCALAPPDATA%\DoubaoWorkSkin\skin.cmd" verify sunlit-atelier
 ```
 
 如果安装版指南指定了不同路径，以该指南为准。下文的 `skin` 是此完整路径的简称，不要求它已加入 PATH；无需检查系统 Node.js，也不在安装目录运行 npm 命令。
@@ -46,11 +60,11 @@
 仅适用于明确选择直接从源码运行的用户。普通换肤请求优先使用上面的安装流程及安装版固定入口。
 
 1. 确定本地项目根目录，确认包含 `skin.mjs`、`package.json` 和 `skins/`。只有 GitHub 链接时先按上文下载，不假定所有用户都安装在同一个路径。
-2. 确认可以在用户的 Mac 上执行命令。云端沙箱或普通聊天环境无法操作本机应用，不要将沙箱中的执行结果当成本机结果。
+2. 确认可以在用户的本机上执行命令。云端沙箱或普通聊天环境无法操作本机应用，不要将沙箱中的执行结果当成本机结果。
 3. 在项目根目录检查 Node.js 版本（`node --version`，需要 ≥ 22），然后运行 `node skin.mjs list`。本项目没有第三方运行依赖，无需 `npm install`。
-4. 按“切换与验证”的主题选择规则，执行 `node skin.mjs start <ID>`，不加 `--force`；成功后执行 `node skin.mjs verify <ID>`。
+4. 按"切换与验证"的主题选择规则，执行 `node skin.mjs start <ID>`，不加 `--force`；成功后执行 `node skin.mjs verify <ID>`。
 
-所有命令应使用项目根目录作为工作目录；路径含空格时正确引用。不要执行 `launch`、`启动豆包工作.command` 或绕过页面与进程身份校验来掩盖失败。`安装皮肤.command` 是允许 Agent 执行的环境准备入口，不会退出应用。
+所有命令应使用项目根目录作为工作目录；路径含空格时正确引用。不要执行 `launch`、`启动豆包工作.command` 或绕过页面与进程身份校验来掩盖失败。`安装皮肤.command`（macOS）和 `安装皮肤.cmd`（Windows）是允许 Agent 执行的环境准备入口，不会退出应用。
 
 ## 创建与调整自定义皮肤
 
@@ -122,18 +136,18 @@ skins/<theme-id>/
 安装版确认安装成功、启动入口存在后，说明以下操作：
 
 1. 保存工作，等待当前 Agent 任务结束。
-2. 打开桌面“豆包工作皮肤”文件夹，双击 `启动豆包工作.command`；出现重启确认时输入 `y` 并回车。
+2. 打开桌面"豆包工作皮肤"文件夹，双击 `启动豆包工作.command`（macOS）或 `启动豆包工作.cmd`（Windows）；出现重启确认时输入 `y` 并回车。
 3. 应用重新打开后回到原对话，继续执行尚未完成的换肤请求。
 
-桌面快捷方式未创建成功时，给出实际的 `~/Library/Application Support/DoubaoWorkSkin/启动入口/启动豆包工作.command` 位置。双击入口使用上次成功选择，首次使用「海风微语」；这不一定是用户刚请求但尚未成功应用的主题。用户返回对话并要求继续后，按此前请求执行 `start` 和 `verify`。不要承诺重启后任务会自动继续，也不要在此时报告目标皮肤已经生效。
+桌面快捷方式未创建成功时，给出实际的启动入口位置：macOS 为 `~/Library/Application Support/DoubaoWorkSkin/启动入口/启动豆包工作.command`，Windows 为 `%LOCALAPPDATA%\DoubaoWorkSkin\启动入口\启动豆包工作.cmd`。双击入口使用上次成功选择，首次使用「海风微语」；这不一定是用户刚请求但尚未成功应用的主题。用户返回对话并要求继续后，按此前请求执行 `start` 和 `verify`。不要承诺重启后任务会自动继续，也不要在此时报告目标皮肤已经生效。
 
-如果用户新开对话、Agent 缺少上下文，让其读取固定的安装版 `AGENTS.md`；用户也可双击桌面入口中的“复制换肤提示词.command”后粘贴。对源码用户说明应退出应用后从项目目录启动，不在当前宿主任务中执行重启。
+如果用户新开对话、Agent 缺少上下文，让其读取固定的安装版 `AGENTS.md`；用户也可双击桌面入口中的"复制换肤提示词.command"（macOS）或"复制换肤提示词.cmd"（Windows）后粘贴。对源码用户说明应退出应用后从项目目录启动，不在当前宿主任务中执行重启。
 
 未安装运行环境时先使用安装脚本自动准备；没有本机命令权限或下载失败时说明具体原因，不要报告已经启用。
 
 ## 恢复官方外观
 
-安装版执行固定入口的 `skin disable`，与桌面“恢复官方外观.command”一致：应用已退出时会停止残留后台进程；应用仍运行时尝试清理页面外观。源码版执行 `node skin.mjs stop`。只有命令成功才报告对应结果；应用已退出时说明“下次正常打开为官方外观”，不要称已验证当前页面。
+安装版执行固定入口的 `skin disable`，与桌面"恢复官方外观.command"（macOS）或"恢复官方外观.cmd"（Windows）一致：应用已退出时会停止残留后台进程；应用仍运行时尝试清理页面外观。源码版执行 `node skin.mjs stop`。只有命令成功才报告对应结果；应用已退出时说明"下次正常打开为官方外观"，不要称已验证当前页面。
 
 CDP 不可用时，安装版可用 `skin stop --keep-appearance`，源码版可用 `node skin.mjs stop --keep-appearance` 停止后台进程，但这不代表当前页面外观已恢复。告知用户完全退出后正常打开应用即可清除临时皮肤，不要删除状态文件冒充恢复成功。
 
