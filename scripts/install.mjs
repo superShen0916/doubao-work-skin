@@ -6,53 +6,21 @@ import os from "node:os";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { prepareUserData, shellQuote, agentPrompt, defaultDataRoot } from "../src/user-data.mjs";
+import { prepareUserData, agentPrompt, defaultDataRoot } from "../src/user-data.mjs";
+import { launcherScripts, createDesktopShortcut, ensurePrivateDir } from "../src/platform/index.mjs";
+
+export { launcherScripts };
 
 const exec = promisify(execFile);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const MARKER = "doubao-work-skin-script-install-v1";
-
-export function launcherScripts(command) {
-  const run = shellQuote(command);
-  return {
-    "启动豆包工作.command": `#!/bin/zsh
-set -u
-unset NODE_OPTIONS NODE_PATH
-${run} start
-result=$?
-if (( result == 2 )); then
-  if [[ ! -t 0 ]]; then
-    print -u2 '需要重启。请保存工作后由用户双击此入口确认。'
-    exit 2
-  fi
-  print '\n需要重启豆包工作。请保存工作，并等待 Agent 当前任务结束。'
-  read -r 'answer?确认已保存并重启？输入 y 后回车，其他输入取消：'
-  if [[ "$answer" == [yY] ]]; then
-    ${run} start --force
-    result=$?
-  else
-    print '已取消，豆包工作保持打开。'
-  fi
-fi
-exit $result
-`,
-    "恢复官方外观.command": `#!/bin/zsh\nunset NODE_OPTIONS NODE_PATH\n${run} disable\n`,
-    "复制换肤提示词.command": `#!/bin/zsh
-set -eu
-unset NODE_OPTIONS NODE_PATH
-prompt_text="$(${run} prompt)"
-print -rn -- "$prompt_text" | /usr/bin/pbcopy
-print '已复制，粘贴到豆包工作对话即可。'
-`,
-  };
-}
 
 export async function install({
   projectRoot = ROOT,
   runtimeDir,
   dataRoot = process.env.DWS_STATE_ROOT || defaultDataRoot,
   desktopDir = process.env.DWS_DESKTOP_DIR || path.join(os.homedir(), "Desktop"),
-  validate = async engine => {
+  validate = async (engine) => {
     const node = path.join(engine, "runtime/bin/node");
     await exec(node, ["--input-type=module", "-e", `
       import { discoverThemes, loadTheme } from './src/theme.mjs';
@@ -62,7 +30,8 @@ export async function install({
   },
 } = {}) {
   if (!runtimeDir) throw new Error("缺少专用运行环境，请双击安装皮肤.command");
-  await fs.mkdir(dataRoot, { recursive: true, mode: 0o700 });
+  await fs.mkdir(dataRoot, { recursive: true });
+  await ensurePrivateDir(dataRoot).catch(() => {});
   const lock = path.join(dataRoot, ".install-lock");
   try { await fs.mkdir(lock); }
   catch (error) {
@@ -73,7 +42,7 @@ export async function install({
   let backup;
   const engine = path.join(dataRoot, "engine");
   try {
-    const exists = await fs.lstat(engine).then(() => true, error => {
+    const exists = await fs.lstat(engine).then(() => true, (error) => {
       if (error.code === "ENOENT") return false;
       throw error;
     });
@@ -89,7 +58,7 @@ export async function install({
     await fs.copyFile(path.join(projectRoot, "scripts/installed-cli.mjs"), path.join(staging, "scripts/installed-cli.mjs"));
     await fs.mkdir(path.join(staging, "runtime/bin"), { recursive: true });
     await fs.copyFile(path.join(runtimeDir, "bin/node"), path.join(staging, "runtime/bin/node"));
-    await fs.chmod(path.join(staging, "runtime/bin/node"), 0o755);
+    await fs.chmod(path.join(staging, "runtime/bin/node"), 0o755).catch(() => {});
     await fs.copyFile(path.join(runtimeDir, "LICENSE"), path.join(staging, "runtime/LICENSE"));
     await fs.writeFile(path.join(staging, ".installation"), MARKER);
     await validate(staging);
@@ -104,21 +73,17 @@ export async function install({
       staging = null;
       const user = await prepareUserData({ projectRoot: engine, dataRoot, enginePath: engine });
       const shortcuts = path.join(dataRoot, "启动入口");
-      await fs.mkdir(shortcuts, { recursive: true, mode: 0o700 });
+      await fs.mkdir(shortcuts, { recursive: true });
+      await ensurePrivateDir(shortcuts).catch(() => {});
       for (const [name, text] of Object.entries(launcherScripts(user.command))) {
         await fs.writeFile(path.join(shortcuts, name), text, { mode: 0o700 });
-        await fs.chmod(path.join(shortcuts, name), 0o700);
       }
       await fs.writeFile(path.join(shortcuts, "给豆包工作的提示词.txt"), `${agentPrompt(dataRoot)}\n`, { mode: 0o600 });
       try {
-        await fs.mkdir(desktopDir, { recursive: true });
-        const link = path.join(desktopDir, "豆包工作皮肤");
-        const existing = await fs.lstat(link).catch(error => { if (error.code === "ENOENT") return null; throw error; });
-        if (!existing) await fs.symlink(shortcuts, link);
-        else if (!existing.isSymbolicLink() || await fs.readlink(link) !== shortcuts) throw new Error("桌面已有同名内容，未覆盖");
-      } catch (error) { console.warn(`桌面入口未创建：${error.message}\n请在 Finder 中打开：${shortcuts}`); }
+        await createDesktopShortcut(shortcuts, "豆包工作皮肤", desktopDir);
+      } catch (error) { console.warn(`桌面入口未创建：${error.message}\n请手动打开：${shortcuts}`); }
       if (backup) {
-        await fs.rm(backup, { recursive: true, force: true }).catch(error => console.warn(`安装成功，旧版本备份未清理：${error.message}`));
+        await fs.rm(backup, { recursive: true, force: true }).catch((error) => console.warn(`安装成功，旧版本备份未清理：${error.message}`));
         backup = null;
       }
       console.log(`已安装到：${dataRoot}\n个人皮肤和上次选择已保留。\n启动入口：${shortcuts}`);
@@ -143,6 +108,6 @@ if (process.argv[1] && (() => {
     console.error("请双击安装皮肤.command，或由 Agent 执行该文件完成安装。");
     process.exitCode = 1;
   } else {
-    install({ runtimeDir: path.resolve(args[1]) }).catch(error => { console.error(`安装失败：${error.message}`); process.exitCode = 1; });
+    install({ runtimeDir: path.resolve(args[1]) }).catch((error) => { console.error(`安装失败：${error.message}`); process.exitCode = 1; });
   }
 }

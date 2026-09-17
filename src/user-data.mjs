@@ -1,13 +1,9 @@
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
+import { paths as platformPaths, shellQuote, generateCliEntry, ensurePrivateDir } from "./platform/index.mjs";
 
-export const defaultDataRoot = path.join(os.homedir(), "Library/Application Support/DoubaoWorkSkin");
+export const defaultDataRoot = platformPaths().dataRoot;
 export const defaultEnginePath = path.join(defaultDataRoot, "engine");
-
-export function shellQuote(value) {
-  return `'${String(value).replaceAll("'", "'\\''")}'`;
-}
 
 async function atomicWrite(file, text, mode = 0o600) {
   const temp = `${file}.${process.pid}.${Date.now()}.tmp`;
@@ -21,14 +17,14 @@ async function atomicWrite(file, text, mode = 0o600) {
 
 export async function prepareUserData({ projectRoot, dataRoot = defaultDataRoot, enginePath = path.join(dataRoot, "engine") } = {}) {
   const skinsDir = path.join(dataRoot, "skins");
-  await fs.mkdir(dataRoot, { recursive: true, mode: 0o700 });
-  await fs.chmod(dataRoot, 0o700);
-  await fs.mkdir(skinsDir, { recursive: true, mode: 0o700 });
+  await fs.mkdir(dataRoot, { recursive: true });
+  await ensurePrivateDir(dataRoot).catch(() => {});
+  await fs.mkdir(skinsDir, { recursive: true });
   for (const entry of await fs.readdir(path.join(projectRoot, "skins"), { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
     const destination = path.join(skinsDir, entry.name);
     // 已存在的目录（包括用户调整过的内置皮肤）绝不覆盖。
-    if (await fs.lstat(destination).then(() => true, error => {
+    if (await fs.lstat(destination).then(() => true, (error) => {
       if (error.code === "ENOENT") return false;
       throw error;
     })) continue;
@@ -48,7 +44,7 @@ export async function prepareUserData({ projectRoot, dataRoot = defaultDataRoot,
   const node = path.join(enginePath, "runtime/bin/node");
   const bridge = path.join(enginePath, "scripts/installed-cli.mjs");
   const command = path.join(dataRoot, "skin");
-  await atomicWrite(command, `#!/bin/sh\nunset NODE_OPTIONS NODE_PATH\nexport DWS_STATE_ROOT=${shellQuote(dataRoot)}\nexec ${shellQuote(node)} ${shellQuote(bridge)} "$@"\n`, 0o700);
+  await atomicWrite(command, generateCliEntry(dataRoot, node, bridge), 0o700);
   const sourceGuide = await fs.readFile(path.join(projectRoot, "AGENTS.md"), "utf8");
   const installedGuide = `# 已安装的脚本版皮肤工具：优先按本节操作
 
