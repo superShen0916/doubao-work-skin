@@ -41,7 +41,9 @@ export async function prepareUserData({ projectRoot, dataRoot = defaultDataRoot,
     }
   }
 
-  const node = path.join(enginePath, "runtime/bin/node");
+  const node = process.platform === "win32"
+    ? path.join(enginePath, "runtime/node.exe")
+    : path.join(enginePath, "runtime/bin/node");
   const bridge = path.join(enginePath, "scripts/installed-cli.mjs");
   const command = path.join(dataRoot, "skin");
   await atomicWrite(command, generateCliEntry(dataRoot, node, bridge), 0o700);

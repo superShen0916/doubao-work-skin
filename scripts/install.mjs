@@ -21,7 +21,9 @@ export async function install({
   dataRoot = process.env.DWS_STATE_ROOT || defaultDataRoot,
   desktopDir = process.env.DWS_DESKTOP_DIR || path.join(os.homedir(), "Desktop"),
   validate = async (engine) => {
-    const node = path.join(engine, "runtime/bin/node");
+    const node = process.platform === "win32"
+      ? path.join(engine, "runtime/node.exe")
+      : path.join(engine, "runtime/bin/node");
     await exec(node, ["--input-type=module", "-e", `
       import { discoverThemes, loadTheme } from './src/theme.mjs';
       if (Number(process.versions.node.split('.')[0]) < 22) throw new Error('Node.js 版本过低');
@@ -56,9 +58,14 @@ export async function install({
     }
     await fs.mkdir(path.join(staging, "scripts"));
     await fs.copyFile(path.join(projectRoot, "scripts/installed-cli.mjs"), path.join(staging, "scripts/installed-cli.mjs"));
-    await fs.mkdir(path.join(staging, "runtime/bin"), { recursive: true });
-    await fs.copyFile(path.join(runtimeDir, "bin/node"), path.join(staging, "runtime/bin/node"));
-    await fs.chmod(path.join(staging, "runtime/bin/node"), 0o755).catch(() => {});
+    if (process.platform === "win32") {
+      await fs.mkdir(path.join(staging, "runtime"), { recursive: true });
+      await fs.copyFile(path.join(runtimeDir, "node.exe"), path.join(staging, "runtime/node.exe"));
+    } else {
+      await fs.mkdir(path.join(staging, "runtime/bin"), { recursive: true });
+      await fs.copyFile(path.join(runtimeDir, "bin/node"), path.join(staging, "runtime/bin/node"));
+      await fs.chmod(path.join(staging, "runtime/bin/node"), 0o755).catch(() => {});
+    }
     await fs.copyFile(path.join(runtimeDir, "LICENSE"), path.join(staging, "runtime/LICENSE"));
     await fs.writeFile(path.join(staging, ".installation"), MARKER);
     await validate(staging);
