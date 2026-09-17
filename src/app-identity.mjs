@@ -44,19 +44,22 @@ export async function assertDoubaoWorkPort(port, { execFileImpl } = {}) {
     if (!pids.length) throw new Error("未找到监听进程");
 
     // 精确路径白名单：macOS 常量 + 平台发现的实际可执行文件路径
-    const allowed = new Set([DOUBAOWORK_BINARY, DOUBAOWORK_BROWSER_BINARY]);
+    // macOS/Windows 文件系统均不区分大小写，统一小写归一后比较
+    const allowed = new Set(
+      [DOUBAOWORK_BINARY, DOUBAOWORK_BROWSER_BINARY].map((p) => path.resolve(p).toLowerCase()),
+    );
     const install = await discoverAppInstall().catch(() => null);
     if (install) {
-      allowed.add(path.resolve(install.mainBinary));
-      if (install.helperBinary) allowed.add(path.resolve(install.helperBinary));
+      allowed.add(path.resolve(install.mainBinary).toLowerCase());
+      if (install.helperBinary) allowed.add(path.resolve(install.helperBinary).toLowerCase());
     }
 
     for (const pid of pids) {
       const executable = await getProcessExecutableWithImpl(pid, execFileImpl);
       const trimmed = executable?.trim();
       if (!trimmed) throw new Error("监听进程不属于豆包工作");
-      // 精确匹配完整路径（规范化后比较），不使用目录前缀（会放行同前缀相邻目录）
-      if (allowed.has(trimmed) || allowed.has(path.resolve(trimmed))) continue;
+      // 精确匹配完整路径（规范化+小写后比较），不使用目录前缀（会放行同前缀相邻目录）
+      if (allowed.has(path.resolve(trimmed).toLowerCase())) continue;
       throw new Error("监听进程不属于豆包工作");
     }
   } catch (error) {

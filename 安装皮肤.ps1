@@ -3,6 +3,8 @@
 
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
+# 强制 TLS 1.2，避免旧系统默认 TLS 1.0/1.1 无法连接 nodejs.org
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 $projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $localAppData = [Environment]::GetFolderPath("LocalApplicationData")
@@ -16,6 +18,7 @@ $archivePath = Join-Path $downloadsDir $archiveName
 # 检查豆包工作是否安装
 $doubaoPaths = @(
     (Join-Path $localAppData "Programs\DoubaoWork\DoubaoWork.exe"),
+    (Join-Path $localAppData "Programs\Doubao\DoubaoWork.exe"),
     (Join-Path $env:ProgramFiles "DoubaoWork\DoubaoWork.exe"),
     (Join-Path ${env:ProgramFiles(x86)} "DoubaoWork\DoubaoWork.exe")
 )
@@ -73,9 +76,13 @@ try {
         exit 1
     }
 
-    # 解压
+    # 解压（用 tar.exe 替代 Expand-Archive，避免 PS 5.1 的 MAX_PATH 260 字符限制）
     $runtimeDir = Join-Path $tempDir "node-v${runtimeVersion}-${runtimeArch}"
-    Expand-Archive -Path $archivePath -DestinationPath $tempDir -Force
+    tar.exe -xf $archivePath -C $tempDir
+    if (-not (Test-Path $runtimeDir)) {
+        Write-Error "解压失败，未找到运行时目录。请重试。"
+        exit 1
+    }
 
     # 运行安装
     $env:DWS_STATE_ROOT = $dataRoot

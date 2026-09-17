@@ -1,6 +1,6 @@
 # Windows 版支持方案
 
-> 分支：`windows-support` | 状态：方案设计阶段
+> 分支：`windows-support` | 状态：已实现（随 v2.2.2 发布）
 > 目标：在不破坏现有 macOS 功能的前提下，让豆包工作皮肤工具完整支持 Windows 桌面端。
 
 ---
@@ -30,7 +30,7 @@
 ### 1.3 非目标
 
 - 不支持 Windows 7 / 8（仅 Windows 10 1903+ 和 Windows 11）。
-- 不支持通过 Microsoft Store 安装的豆包工作版本（如有，后续单独适配）。
+- 支持 Microsoft Store 版豆包工作（通过 IApplicationActivationManager COM 激活 + CDP 端口验证，桌面版优先）。
 - 不在本阶段做 GUI 安装程序（保持脚本安装，与 macOS 一致）。
 - 不修改豆包工作应用本身。
 

@@ -24,7 +24,6 @@ async function runPowerShell(script, { timeout = 10_000 } = {}) {
   // 设置输出编码为 UTF-8，确保中文路径和输出正确解码
   const wrapped = `
     [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-    $OutputEncoding = [System.Text.Encoding]::UTF8
     ${script}
   `;
   const { stdout, stderr } = await execFileAsync(POWERSHELL, [...PS_ARGS, wrapped], {
@@ -157,9 +156,8 @@ export async function discoverAppInstall() {
   // 桌面版优先（CDP 参数支持最可靠）
   if (fromProcess?.type === "desktop") return fromProcess;
   if (fromDesktop) return fromDesktop;
-  // Store 版：从进程反查时可能缺少 appUserModelId，用 Store 包探测补充
+  // Store 版：从进程反查时缺少 appUserModelId，用 Store 包探测补充
   if (fromProcess?.type === "store") {
-    if (fromProcess.appUserModelId) return fromProcess;
     if (fromStore) return fromStore;
     return fromProcess;
   }
@@ -170,6 +168,10 @@ export async function discoverAppInstall() {
 // ─── 应用启动 ───────────────────────────────────────────
 
 async function launchStoreApp(install, port) {
+  const numericPort = Number(port);
+  if (!Number.isInteger(numericPort) || numericPort < 1 || numericPort > 65535) {
+    throw new Error(`无效端口: ${port}`);
+  }
   // Store 应用：用 IApplicationActivationManager 激活
   // 参考 Codex Dream Skin 的实现
   // 注意：PowerShell here-string 的结束标记 "@ 必须在行首，不能缩进，否则 5.1 语法错误
@@ -191,7 +193,7 @@ public static class AppActivator {
 "@
 $mgr = New-Object AppActivator+ApplicationActivationManager
 $am = [AppActivator+IApplicationActivationManager]$mgr
-$launchArgs = "--remote-debugging-address=127.0.0.1 --remote-debugging-port=${port}"
+$launchArgs = "--remote-debugging-address=127.0.0.1 --remote-debugging-port=${numericPort}"
 $procId = [uint32]0
 $hr = $am.ActivateApplication("${install.appUserModelId}", $launchArgs, 0, [ref]$procId)
 if ($hr -ne 0) { throw "ActivateApplication failed: 0x$('{0:X8}' -f $hr)" }
@@ -207,7 +209,7 @@ $procId
     try {
       const child = spawn(install.mainBinary, [
         "--remote-debugging-address=127.0.0.1",
-        `--remote-debugging-port=${port}`,
+        `--remote-debugging-port=${numericPort}`,
       ], { detached: true, stdio: "ignore", windowsHide: true });
       if (child.pid) {
         child.unref();
@@ -328,7 +330,8 @@ export function shellQuote(value) {
 
 export function generateCliEntry(dataRoot, nodePath, bridgePath) {
   // Windows .cmd wrapper，加 chcp 65001 确保中文路径正确解析
-  return `@echo off\r\nchcp 65001 >nul\r\nsetlocal\r\nset NODE_OPTIONS=\r\nset NODE_PATH=\r\nset DWS_STATE_ROOT=${dataRoot}\r\n"${nodePath}" "${bridgePath}" %*\r\n`;
+  // set "VAR=value" 是 cmd.exe 安全写法，可抵御路径中含 & | ^ 等特殊字符
+  return `@echo off\r\nchcp 65001 >nul\r\nsetlocal\r\nset NODE_OPTIONS=\r\nset NODE_PATH=\r\nset "DWS_STATE_ROOT=${dataRoot}"\r\n"${nodePath}" "${bridgePath}" %*\r\n`;
 }
 
 export function launcherScripts(command) {
@@ -347,7 +350,7 @@ export async function createDesktopShortcut(targetPath, linkName, desktopDirOver
   const desktopDir = desktopDirOverride || paths().desktopDir;
   await fs.mkdir(desktopDir, { recursive: true });
   const linkPath = path.join(desktopDir, `${linkName}.lnk`);
-  // 存在性检查：已有同名 .lnk 且目标不同时不覆盖
+  // 存在性检查：已有同名 .lnk 且目标不同或无法读取时不覆盖
   try {
     await fs.access(linkPath);
     // 用 WScript.Shell 读取已有快捷方式的目标
@@ -356,13 +359,15 @@ export async function createDesktopShortcut(targetPath, linkName, desktopDirOver
       $sc = $ws.CreateShortcut('${linkPath.replace(/'/g, "''")}')
       $sc.TargetPath
     `;
-    const existingTarget = await runPowerShell(readScript, { timeout: 5_000 });
-    if (existingTarget && path.resolve(existingTarget) !== path.resolve(targetPath)) {
+    const existingTarget = (await runPowerShell(readScript, { timeout: 5_000 })).trim();
+    if (!existingTarget) {
+      throw new Error("桌面已有同名快捷方式但无法读取其目标，未覆盖");
+    }
+    if (path.resolve(existingTarget) !== path.resolve(targetPath)) {
       throw new Error("桌面已有同名快捷方式指向其他目标，未覆盖");
     }
   } catch (error) {
-    if (error.code !== "ENOENT" && !error.message.includes("未覆盖")) throw error;
-    if (error.message.includes("未覆盖")) throw error;
+    if (error.code !== "ENOENT") throw error;
   }
   // 用 WScript.Shell COM 创建 .lnk
   const script = `

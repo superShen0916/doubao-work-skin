@@ -50,7 +50,8 @@ if (process.argv[1] && (() => {
   catch { return false; }
 })()) {
   main().then(code => { process.exitCode = code || 0; }).catch(error => {
-    console.error(error.code === "ENOENT" ? `文件不存在，请确认已安装豆包工作或重新运行安装皮肤.command。\n${error.message}` : error.message);
+    const installScript = process.platform === "win32" ? "安装皮肤.cmd" : "安装皮肤.command";
+    console.error(error.code === "ENOENT" ? `文件不存在，请确认已安装豆包工作或重新运行${installScript}。\n${error.message}` : error.message);
     process.exitCode = error.exitCode || 1;
   });
 }

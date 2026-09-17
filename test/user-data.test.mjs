@@ -50,9 +50,17 @@ test("首次安装复制内置皮肤，升级保留个人皮肤、修改与状�
 test("固定命令入口使用内置 Node，正确处理空格、引号和调用参数", async () => {
   await fixture(async options => {
     const user = await prepareUserData(options);
-    const bin = path.join(options.enginePath, "runtime/bin");
-    await fs.mkdir(bin, { recursive: true });
-    await fs.writeFile(path.join(bin, "node"), '#!/bin/sh\nprintf "%s\\n" "$@"\n', { mode: 0o700 });
+    // 按平台创建对应的 Node 假可执行文件
+    if (process.platform === "win32") {
+      const runtimeDir = path.join(options.enginePath, "runtime");
+      await fs.mkdir(runtimeDir, { recursive: true });
+      await fs.writeFile(path.join(runtimeDir, "node.exe"),
+        "@echo off\r\n:loop\r\nif \"%~1\"==\"\" goto end\r\necho %~1\r\nshift\r\ngoto loop\r\n:end\r\nexit /b 0\r\n");
+    } else {
+      const bin = path.join(options.enginePath, "runtime/bin");
+      await fs.mkdir(bin, { recursive: true });
+      await fs.writeFile(path.join(bin, "node"), '#!/bin/sh\nprintf "%s\\n" "$@"\n', { mode: 0o700 });
+    }
     const { stdout } = await exec(user.command, ["start", "name with spaces", "$(touch never-run)"]);
     assert.deepEqual(stdout.trimEnd().split("\n"), [
       path.join(options.enginePath, "scripts/installed-cli.mjs"),

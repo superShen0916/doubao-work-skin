@@ -24,11 +24,15 @@ export async function install({
     const node = process.platform === "win32"
       ? path.join(engine, "runtime/node.exe")
       : path.join(engine, "runtime/bin/node");
+    // Windows 上保留系统环境（SystemRoot/TEMP/PATHEXT 等），仅 Unix 用精简 PATH 避免 Homebrew 污染
+    const validateEnv = process.platform === "win32"
+      ? { ...process.env }
+      : { HOME: os.homedir(), PATH: "/usr/bin:/bin:/usr/sbin:/sbin" };
     await exec(node, ["--input-type=module", "-e", `
       import { discoverThemes, loadTheme } from './src/theme.mjs';
       if (Number(process.versions.node.split('.')[0]) < 22) throw new Error('Node.js 版本过低');
       for (const name of await discoverThemes()) await loadTheme({ name });
-    `], { cwd: engine, env: { HOME: os.homedir(), PATH: "/usr/bin:/bin:/usr/sbin:/sbin" } });
+    `], { cwd: engine, env: validateEnv });
   },
 } = {}) {
   if (!runtimeDir) throw new Error("缺少专用运行环境，请双击安装皮肤.command");

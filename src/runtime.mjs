@@ -160,43 +160,6 @@ async function defaultInspectProcess(pid) {
   return platformInspectProcess(pid);
 }
 
-// 解析命令行字符串为参数数组，正确处理 Windows/Unix 风格的引号包裹
-function parseCommandLineArgs(cmdLine) {
-  const args = [];
-  let current = "";
-  let inQuotes = false;
-  let quoteChar = null;
-  for (let i = 0; i < cmdLine.length; i++) {
-    const ch = cmdLine[i];
-    if (inQuotes) {
-      if (ch === quoteChar) {
-        // Windows: "" 表示转义的引号
-        if (quoteChar === '"' && cmdLine[i + 1] === '"') {
-          current += '"';
-          i++;
-        } else {
-          inQuotes = false;
-          quoteChar = null;
-        }
-      } else {
-        current += ch;
-      }
-    } else if (ch === '"' || ch === "'") {
-      inQuotes = true;
-      quoteChar = ch;
-    } else if (ch === " " || ch === "\t") {
-      if (current) {
-        args.push(current);
-        current = "";
-      }
-    } else {
-      current += ch;
-    }
-  }
-  if (current) args.push(current);
-  return args;
-}
-
 function parseWatchCommand(command, { injectorPath, cwd }) {
   const source = String(command || "").trim();
   if (!source) return null;
@@ -355,12 +318,17 @@ export async function findDoubaoWorkPid({ execFileImpl = null } = {}) {
   const mainBinary = install?.mainBinary || DOUBAOWORK_BINARY;
   const mainName = path.basename(mainBinary).replace(/\.exe$/i, "");
   const rows = await listProcessesByName([mainName, `${mainName}.exe`]).catch(() => []);
-  // 优先用 executablePath 精确匹配（不受命令行引号影响），其次用命令行匹配（去除开头引号）
+  // 优先用 executablePath 精确匹配（不受命令行引号影响），其次用命令行匹配
   const normalizedMain = path.resolve(mainBinary).toLowerCase();
   const match = rows.find((row) => {
     if (row.executablePath && path.resolve(row.executablePath).toLowerCase() === normalizedMain) return true;
-    const cmd = String(row.command || "").replace(/^"/, "");
-    return cmd === mainBinary || cmd.startsWith(`${mainBinary} `);
+    // 提取命令行中第一个可执行文件路径（去除引号包裹），兼容 Windows "C:\...\exe" --args 格式
+    const cmd = String(row.command || "");
+    const firstToken = cmd.startsWith('"')
+      ? cmd.slice(1, cmd.indexOf('"', 1))
+      : cmd.split(/\s+/)[0];
+    if (!firstToken) return false;
+    return path.resolve(firstToken).toLowerCase() === normalizedMain;
   });
   return match ? match.pid : null;
 }
@@ -415,7 +383,6 @@ export async function launchDoubaoWork({
       return child.pid;
     }
     // 正常路径：通过 platform 层启动
-    const { discoverAppInstall } = await import("./platform/index.mjs");
     const install = await discoverAppInstall();
     if (!install) throw new Error("未找到豆包工作安装");
     return launchApp(install, port, { logFd: stdoutFd, errorFd: stderrFd });
@@ -446,8 +413,12 @@ export async function findDoubaoWorkBrowserPids({ execFileImpl = null } = {}) {
   return rows
     .filter((row) => {
       if (row.executablePath && path.resolve(row.executablePath).toLowerCase() === normalizedHelper) return true;
-      const command = String(row.command || "").replace(/^"/, "");
-      return command === helperBinary || command.startsWith(`${helperBinary} `);
+      const command = String(row.command || "");
+      const firstToken = command.startsWith('"')
+        ? command.slice(1, command.indexOf('"', 1))
+        : command.split(/\s+/)[0];
+      if (!firstToken) return false;
+      return path.resolve(firstToken).toLowerCase() === normalizedHelper;
     })
     .map((row) => row.pid);
 }
