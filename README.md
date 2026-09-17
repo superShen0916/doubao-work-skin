@@ -1,6 +1,6 @@
 # Doubao Work Skin
 
-为 macOS「豆包工作」桌面端提供 13 套皮肤，支持通过 Agent 切换和定制。主题以临时样式注入，不修改应用安装包，可恢复官方外观。
+为 macOS「豆包工作」桌面端提供 13 套皮肤，支持通过 Agent 切换和定制。输入框发送按钮等控件自动适配各主题强调色。主题以临时样式注入，不修改应用安装包，可恢复官方外观。
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
 

@@ -111,7 +111,7 @@ skins/<theme-id>/
 
 背景建议约 16:10，例如 1586×992。左侧 0–280px 留给侧栏，中间 380–1080px 保持低对比度，主体尽量放在右侧 1100–1586px，顶部 56px 不放关键元素。实际裁剪随窗口大小变化，需要检查不同窗口尺寸。
 
-使用 `src/selectors.json` 中登记的 `data-testid`、语义 role 或稳定类名前缀。禁止 `body *` 全局改色、`[class*=card]` 等宽泛匹配和未经验证的位置选择器。保持 hover、focus-visible、selected、disabled 状态及正常交互，不隐藏或拦截控件。
+使用 `src/selectors.json` 中登记的 `data-testid`、语义 role 或稳定类名前缀。禁止 `body *` 全局改色、`[class*=card]` 等宽泛匹配和未经验证的位置选择器。保持 hover、focus-visible、selected、disabled 状态及正常交互，不隐藏或拦截控件。发送按钮（`chat_input_send_button`）已在共享 `src/base.css` 中适配主题强调色，个人主题无需重复处理。
 
 如需向本仓库贡献新主题，同步更新 README 的主题列表、素材来源与许可说明，以及主题发现测试中的内置清单；个人定制只需完成资源检查和实际效果验证。完整贡献要求见 [CONTRIBUTING.md](./CONTRIBUTING.md)。
 
