@@ -61,3 +61,9 @@ test("只有其他应用的 CDP 时发现结果为空，即使声称自己是豆
   });
   assert.equal(port, null);
 });
+
+test("macOS 上仅大小写不同的伪造路径必须被拒绝", async () => {
+  if (process.platform === "win32") return; // Windows 文件系统不区分大小写
+  const fake = DOUBAOWORK_BINARY.replace("DoubaoWork", "DOUBAOWORK");
+  await assert.rejects(assertDoubaoWorkPort(9342, { execFileImpl: inspect([fake]) }), /已拒绝连接/);
+});

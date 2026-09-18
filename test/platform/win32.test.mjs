@@ -3,8 +3,9 @@
  *
  * 只测试不依赖 PowerShell/COM 的纯输出函数：
  * shellQuote、generateCliEntry、launcherScripts、paths。
- * 需要真实 Windows 环境的函数（discoverAppInstall、launchStoreApp 等）
- * 由 CI 的 windows-latest 矩阵端到端覆盖。
+ * 需要真实 Windows 环境的函数（discoverAppInstall、launchStoreApp、
+ * Get-AppxPackage、IApplicationActivationManager、.lnk 创建等）
+ * 需 Windows 实机验证，CI 仅执行 npm test 不覆盖这些路径。
  */
 import test from "node:test";
 import assert from "node:assert/strict";

@@ -15,6 +15,12 @@ import { findListeningPids, getProcessExecutable, discoverAppInstall } from "./p
 
 const execFileAsync = promisify(execFile);
 
+// 路径归一化：Windows 文件系统不区分大小写，统一小写；
+// macOS 可能运行在大小写敏感卷上，保持精确比较，不放宽安全边界。
+const normalizePath = process.platform === "win32"
+  ? (p) => path.resolve(p).toLowerCase()
+  : (p) => path.resolve(p);
+
 // 保留导出兼容性：macOS 上的固定路径，供 runtime.mjs 等模块引用
 export const DOUBAOWORK_BINARY = "/Applications/DoubaoWork.app/Contents/MacOS/DoubaoWork";
 export const DOUBAOWORK_BROWSER_BINARY = "/Applications/DoubaoWork.app/Contents/Helpers/DoubaoWork Browser.app/Contents/MacOS/DoubaoWork Browser";
@@ -44,22 +50,22 @@ export async function assertDoubaoWorkPort(port, { execFileImpl } = {}) {
     if (!pids.length) throw new Error("未找到监听进程");
 
     // 精确路径白名单：macOS 常量 + 平台发现的实际可执行文件路径
-    // macOS/Windows 文件系统均不区分大小写，统一小写归一后比较
+    // Windows 不区分大小写；macOS 保持精确比较（大小写敏感卷上不同路径指向不同文件）
     const allowed = new Set(
-      [DOUBAOWORK_BINARY, DOUBAOWORK_BROWSER_BINARY].map((p) => path.resolve(p).toLowerCase()),
+      [DOUBAOWORK_BINARY, DOUBAOWORK_BROWSER_BINARY].map(normalizePath),
     );
     const install = await discoverAppInstall().catch(() => null);
     if (install) {
-      allowed.add(path.resolve(install.mainBinary).toLowerCase());
-      if (install.helperBinary) allowed.add(path.resolve(install.helperBinary).toLowerCase());
+      allowed.add(normalizePath(install.mainBinary));
+      if (install.helperBinary) allowed.add(normalizePath(install.helperBinary));
     }
 
     for (const pid of pids) {
       const executable = await getProcessExecutableWithImpl(pid, execFileImpl);
       const trimmed = executable?.trim();
       if (!trimmed) throw new Error("监听进程不属于豆包工作");
-      // 精确匹配完整路径（规范化+小写后比较），不使用目录前缀（会放行同前缀相邻目录）
-      if (allowed.has(path.resolve(trimmed).toLowerCase())) continue;
+      // 精确匹配完整路径，不使用目录前缀（会放行同前缀相邻目录）
+      if (allowed.has(normalizePath(trimmed))) continue;
       throw new Error("监听进程不属于豆包工作");
     }
   } catch (error) {
