@@ -59,7 +59,7 @@ export async function prepareUserData({ projectRoot, dataRoot = defaultDataRoot,
 - 将 \`npm run check\` 替换成 \`${shellQuote(command)} check\`。
 - 个人皮肤目录：\`${skinsDir}\`。所有新建和调整在这里完成，不修改 engine 内的代码。
 - 共享 CSS 和选择器只读参考：\`${path.join(enginePath, "src")}\`。
-- 首次启用或需要重启时，请用户双击桌面“豆包工作皮肤”文件夹里的“启动豆包工作.command”。Agent 不执行 --force，也不运行此启动脚本代替用户确认。
+- 首次启用或需要重启时，请用户从启动台打开「豆包换肤」App（\`~/Applications/豆包换肤.app\`，推荐，无需确认），或双击桌面“豆包换肤”文件夹里的“启动豆包工作.command”。Agent 不执行 --force，不打开 App，也不运行此启动脚本代替用户确认。
 - 重新安装或更新不会覆盖已有个人皮肤目录、状态和上次选择。新版本新增的内置皮肤会在安装时补入。
 - v2.2.2 起加载器自动兼容旧主题的状态条和菜单规则；重新应用即可，无需改写个人主题文件。
 - 完成应用后执行 \`verify <主题ID>\`。仅准备文件不能报告皮肤已生效。
@@ -73,5 +73,5 @@ ${sourceGuide}`;
 }
 
 export function agentPrompt(dataRoot = defaultDataRoot) {
-  return `请读取本机文件「${path.join(dataRoot, "AGENTS.md")}」，按其中的已安装版说明，先列出可用皮肤的中文名称，再帮我切换或制作皮肤。只有验证通过才报告成功；如果需要重启豆包工作，告诉我双击桌面“豆包工作皮肤”文件夹里的启动入口，不要在当前任务中重启应用。`;
+  return `请读取本机文件「${path.join(dataRoot, "AGENTS.md")}」，按其中的已安装版说明，先列出可用皮肤的中文名称，再帮我切换或制作皮肤。只有验证通过才报告成功；如果需要重启豆包工作，告诉我从启动台打开「豆包换肤」App（或双击桌面“豆包换肤”文件夹里的启动入口），不要在当前任务中重启应用。`;
 }

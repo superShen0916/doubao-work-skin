@@ -6,7 +6,7 @@ import { createConnection } from "node:net";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { fetchCdpJson } from "./cdp.mjs";
-import { assertDoubaoWorkPort, DOUBAOWORK_BINARY, DOUBAOWORK_BROWSER_BINARY } from "./app-identity.mjs";
+import { assertDoubaoWorkPort, DOUBAOWORK_BINARY, DOUBAOWORK_BROWSER_BINARY, DOUBAOWORK_PGREP_PATTERN } from "./app-identity.mjs";
 export { DOUBAOWORK_BINARY, DOUBAOWORK_BROWSER_BINARY } from "./app-identity.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -280,7 +280,7 @@ export async function stopWatchProcess({
 
 export async function findDoubaoWorkPid({ execFileImpl = execFileAsync } = {}) {
   try {
-    const { stdout } = await execFileImpl("pgrep", ["-f", "DoubaoWork.app/Contents/MacOS/DoubaoWork"], { encoding: "utf8" });
+    const { stdout } = await execFileImpl("pgrep", ["-f", DOUBAOWORK_PGREP_PATTERN], { encoding: "utf8" });
     const pid = String(stdout).split("\n").map(Number).find((value) => Number.isInteger(value) && value > 0);
     return pid || null;
   } catch {

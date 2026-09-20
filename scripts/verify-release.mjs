@@ -28,14 +28,14 @@ from pathlib import Path
 import hashlib, sys, zipfile
 root, version = Path(sys.argv[1]), sys.argv[2]
 expected = {}
-for name in ['安装皮肤.command', '启动豆包工作.command', 'skin.mjs', 'src', 'skins', 'README.md', 'AGENTS.md', 'CONTRIBUTING.md', 'RELEASING.md', 'SECURITY.md', 'LICENSE', 'package.json', 'scripts/install.mjs', 'scripts/installed-cli.mjs']:
+for name in ['安装皮肤.command', '启动豆包工作.command', 'skin.mjs', 'src', 'skins', 'assets/AppIcon.icns', 'README.md', 'AGENTS.md', 'CONTRIBUTING.md', 'RELEASING.md', 'SECURITY.md', 'LICENSE', 'package.json', 'scripts/install.mjs', 'scripts/installed-cli.mjs']:
     source = root / name
     for file in sorted(source.rglob('*')) if source.is_dir() else [source]:
         if file.is_file():
             expected[file.relative_to(root).as_posix()] = file.read_bytes()
 expected['先看这里.txt'] = None
 for filename, prefix, skill in [
-    (f'DoubaoWorkSkin-{version}-macos-scripts.zip', '豆包工作皮肤/', False),
+    (f'DoubaoWorkSkin-{version}-macos-scripts.zip', '豆包换肤/', False),
     (f'doubao-work-skin-{version}-skill.zip', 'doubao-work-skin/assets/project/', True),
 ]:
     archive = root / 'dist' / filename

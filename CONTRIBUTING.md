@@ -29,7 +29,7 @@ npm test
 - 旧浏览器尚未退出、首选端口被占用、实际 CDP 端口变化时，避免误用旧状态或忽略失败。
 - 应用已退出或 CDP 不可用时，`stop --keep-appearance` 能停止本项目的残留 watch。
 
-修改安装或更新逻辑时，在独立临时目录设置 `DWS_STATE_ROOT` 和 `DWS_DESKTOP_DIR` 验证，避免覆盖个人安装。覆盖首次安装、升级保留个人主题、失败回滚和桌面同名文件保护；完整验收要求见 [RELEASING.md](./RELEASING.md#发布前验证)。
+修改安装或更新逻辑时，在独立临时目录设置 `DWS_STATE_ROOT`、`DWS_DESKTOP_DIR` 和 `DWS_APPLICATIONS_DIR` 验证，避免覆盖个人安装。覆盖首次安装、升级保留个人主题、失败回滚和桌面同名文件保护；完整验收要求见 [RELEASING.md](./RELEASING.md#发布前验证)。
 
 截图使用 `scripts/capture-screenshots.mjs` 时，会切换主题并尝试进入新对话，临时隐藏侧栏与输入内容，截图后移除临时样式。它不保证隐藏水印或所有个人信息，输出需人工检查后再发布。不要通过高频全 DOM 扫描或反复删除应用节点来处理截图，避免页面卡死。
 

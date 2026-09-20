@@ -4,6 +4,8 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 export const DOUBAOWORK_BINARY = "/Applications/DoubaoWork.app/Contents/MacOS/DoubaoWork";
 export const DOUBAOWORK_BROWSER_BINARY = "/Applications/DoubaoWork.app/Contents/Helpers/DoubaoWork Browser.app/Contents/MacOS/DoubaoWork Browser";
+// pgrep -f 匹配进程命令行，使用相对路径子串（兼容绝对路径启动的进程）
+export const DOUBAOWORK_PGREP_PATTERN = DOUBAOWORK_BINARY.replace(/^\/Applications\//, "");
 const APP_EXECUTABLES = new Set([DOUBAOWORK_BINARY, DOUBAOWORK_BROWSER_BINARY]);
 
 // 不信任 CDP 返回的 Browser 名称、页面标题或命令行子串。
