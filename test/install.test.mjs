@@ -234,14 +234,16 @@ test("launcherApp 生成的启动脚本通过 zsh 语法检查", async () => {
 });
 
 // Launcher 行为测试：用 mock 的 pgrep/open/skin 验证各分支的调用序列
-async function runLauncherScenario({ pgrepExit = 0, statusOutput = "", startExit = 0, startForceExit = 0 } = {}) {
+async function runLauncherScenario({ pgrepExit = 0, statusOutput = "", startExit = 0, startForceExit = 0, detailed = false } = {}) {
   const temp = await fs.mkdtemp(path.join(os.tmpdir(), "dws-launcher-behavior-"));
   const callLog = path.join(temp, "calls.log");
   const pgrepScript = path.join(temp, "mock-pgrep");
   const openScript = path.join(temp, "mock-open");
+  const dialogScript = path.join(temp, "mock-osascript");
   const skinScript = path.join(temp, "mock-skin");
   await fs.writeFile(pgrepScript, `#!/bin/sh\necho "pgrep" >> "${callLog}"\nexit ${pgrepExit}\n`, { mode: 0o755 });
   await fs.writeFile(openScript, `#!/bin/sh\necho "open $*" >> "${callLog}"\nexit 0\n`, { mode: 0o755 });
+  await fs.writeFile(dialogScript, `#!/bin/sh\necho "dialog" >> "${callLog}"\nexit 0\n`, { mode: 0o755 });
   await fs.writeFile(skinScript, `#!/bin/sh
 echo "skin $*" >> "${callLog}"
 case "$1" in
@@ -254,7 +256,9 @@ esac
 `, { mode: 0o755 });
   const app = launcherApp({ command: skinScript, version: "2.2.2" });
   const launcherScript = path.join(temp, "Launcher");
-  await fs.writeFile(launcherScript, app.executable, { mode: 0o755 });
+  // 失败路径也完全隔离，测试不能在用户桌面弹出真实对话框。
+  await fs.writeFile(launcherScript, app.executable.replace('/usr/bin/osascript', `"${dialogScript}"`), { mode: 0o755 });
+  let exitCode = 0;
   try {
     await exec("/bin/zsh", [launcherScript], {
       env: {
@@ -266,12 +270,13 @@ esac
         MOCK_START_FORCE_EXIT: String(startForceExit),
       },
     });
-  } catch {
-    // 某些场景预期非0退出码，忽略
+  } catch (error) {
+    exitCode = error.code;
   }
   const log = await fs.readFile(callLog, "utf8").catch(() => "");
   await fs.rm(temp, { recursive: true, force: true });
-  return log.trim().split("\n").filter(Boolean);
+  const calls = log.trim().split("\n").filter(Boolean);
+  return detailed ? { calls, exitCode } : calls;
 }
 
 test("Launcher 行为：应用未运行时调用 skin start 成功后激活窗口", async () => {
@@ -296,4 +301,28 @@ test("Launcher 行为：无皮肤且无 CDP 时调用 skin start --force", async
     startForceExit: 0,
   });
   assert.deepEqual(calls, ["pgrep", "skin start", "skin start --force", "open /Applications/DoubaoWork.app"]);
+});
+
+test("Launcher 行为：已运行时一般启动错误也重试一次并激活窗口", async () => {
+  const result = await runLauncherScenario({ startExit: 1, detailed: true });
+  assert.deepEqual(result, {
+    calls: ["pgrep", "skin start", "skin start --force", "open /Applications/DoubaoWork.app"],
+    exitCode: 0,
+  });
+});
+
+test("Launcher 行为：重试失败时保留错误码并提示，不激活窗口或循环重试", async () => {
+  const result = await runLauncherScenario({ startExit: 1, startForceExit: 7, detailed: true });
+  assert.deepEqual(result, {
+    calls: ["pgrep", "skin start", "skin start --force", "dialog"],
+    exitCode: 7,
+  });
+});
+
+test("Launcher 行为：应用未运行且启动失败时直接提示，不强制重试", async () => {
+  const result = await runLauncherScenario({ pgrepExit: 1, startExit: 1, detailed: true });
+  assert.deepEqual(result, {
+    calls: ["pgrep", "skin start", "dialog"],
+    exitCode: 1,
+  });
 });

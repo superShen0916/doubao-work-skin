@@ -69,8 +69,8 @@ else
   # 已运行 → 让 skin start 自己处理（检查 CDP、复用或重启）
   "$SKIN" start >> "$LAUNCHER_LOG" 2>&1
   result=$?
-  if (( result == 2 )); then
-    # 需要重启带 CDP，直接 --force（不询问）
+  if (( result != 0 )); then
+    # 启动失败后用 --force 重试一次，由启动流程检查 CDP 并在需要时重启
     "$SKIN" start --force >> "$LAUNCHER_LOG" 2>&1
     result=$?
   fi
