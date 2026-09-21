@@ -21,3 +21,8 @@ div[class*="flex-col-reverse"][class*="input-guidance"] > *:not([data-testid="ch
 
 /* 模拟用户额外定制，应保持不变。 */
 #personal-card { color: rgb(123, 45, 67); border-radius: 23px; }
+
+/* 旧主题仍会给消息与输入框后代统一改色；共享链接背景应继续生效。 */
+[data-testid="receive_message"] [data-testid="message_text_content"] *,
+[data-testid="chat_input"] * { color: #2a3a3a !important; }
+[data-testid="send_message"] [data-testid="message_text_content"] * { color: white !important; }

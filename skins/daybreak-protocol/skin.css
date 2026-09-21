@@ -80,7 +80,7 @@
 }
 
 [data-testid="receive_message"] [data-testid="message_text_content"],
-[data-testid="receive_message"] [data-testid="message_text_content"] * {
+[data-testid="receive_message"] [data-testid="message_text_content"] :not(:where(a, button, svg, [class*="chip"], [class*="resource-label"])) {
   color: #172f3e !important;
   text-shadow: 0 1px rgba(255, 255, 255, .58) !important;
 }
@@ -94,7 +94,7 @@
 }
 
 [data-testid="send_message"] [data-testid="message_text_content"],
-[data-testid="send_message"] [data-testid="message_text_content"] * {
+[data-testid="send_message"] [data-testid="message_text_content"] :not(:where(a, button, svg, [class*="chip"], [class*="resource-label"])) {
   color: #f7fcff !important;
 }
 
