@@ -1,5 +1,49 @@
 /* Gothic Void Refined v3 — fully variable-driven with motion */
 
+/* 聊天内容区里的链接和文档卡片：加半透明强调色背景，和正文区分开 */
+
+/* 聊天记录里的链接（静态文本，加 padding 和圆角） */
+[data-testid="receive_message"] [data-testid="message_text_content"] a,
+[data-testid="send_message"] [data-testid="message_text_content"] a {
+  background: color-mix(in srgb, var(--dws-accent) 12%, transparent) !important;
+  padding: 0 4px !important;
+  border-radius: 4px !important;
+}
+
+/* 输入框里的链接（contenteditable，不加 padding 避免影响排版） */
+[data-testid="chat_input"] a {
+  background: color-mix(in srgb, var(--dws-accent) 12%, transparent) !important;
+  border-radius: 4px !important;
+}
+
+/* 聊天记录里的文档/资源链接卡片 */
+[data-testid="receive_message"] [data-testid="message_text_content"] [class*="resource-label"],
+[data-testid="send_message"] [data-testid="message_text_content"] [class*="resource-label"] {
+  background: color-mix(in srgb, var(--dws-accent) 12%, transparent) !important;
+  padding: 2px 6px !important;
+  border-radius: 4px !important;
+}
+
+/* 输入框里的文档卡片 */
+[data-testid="chat_input"] [class*="resource-label"] {
+  background: color-mix(in srgb, var(--dws-accent) 12%, transparent) !important;
+  border-radius: 4px !important;
+}
+
+/* 用户消息气泡里的"展开全部"按钮，文字和正文一致 */
+[data-testid="send_message"] [data-testid="message_content"] [class*="collapsed"] {
+  color: white !important;
+}
+
+/* 文档卡片里面的 a 标签，不要二次加背景 */
+[data-testid="receive_message"] [data-testid="message_text_content"] [class*="resource-label"] a,
+[data-testid="send_message"] [data-testid="message_text_content"] [class*="resource-label"] a,
+[data-testid="chat_input"] [class*="resource-label"] a {
+  background: transparent !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+}
+
 /* === 1. Application surfaces === */
 [data-testid="chat-route-layout"] {
   background: var(--dws-bg) !important;

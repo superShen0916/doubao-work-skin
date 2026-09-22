@@ -115,7 +115,7 @@ test("声明的背景资源缺失时明确失败", async () => {
   });
 });
 
-test("主题配置、背景和 CSS 不能通过符号链接读取目录外文件", async () => {
+test("主题配置、背景和 CSS 不能通过符号链接读取目录外文件", async (t) => {
   for (const resource of ["theme.json", "background.png", "skin.css"]) {
     await withTempDir(async (root) => {
       const skinDir = path.join(root, "sample");
@@ -126,7 +126,13 @@ test("主题配置、背景和 CSS 不能通过符号链接读取目录外文件
         background: resource === "background.png" ? { image: resource } : undefined,
       })));
       if (resource === "theme.json") await fs.unlink(path.join(skinDir, resource));
-      await fs.symlink(path.join(root, "outside"), path.join(skinDir, resource));
+      try {
+        await fs.symlink(path.join(root, "outside"), path.join(skinDir, resource));
+      } catch (error) {
+        // Windows 无开发者模式/管理员时无法建符号链接，安全检查无法在此环境演练，跳过而非失败
+        if (error.code === "EPERM") { t.skip("当前环境不允许创建符号链接"); return; }
+        throw error;
+      }
       await assert.rejects(loadTheme({ skinDir, baseCssPath: path.join(root, "base.css") }), /符号链接/);
     });
   }

@@ -41,4 +41,4 @@ tar -xzf "$archive_path" -C "$temp_dir"
 runtime_dir="$temp_dir/node-v${runtime_version}-darwin-${runtime_arch}"
 export DWS_STATE_ROOT="$data_root"
 "$runtime_dir/bin/node" "$project_root/scripts/install.mjs" --runtime-dir "$runtime_dir"
-print '\n安装完成。请保存工作，等 Agent 当前任务结束，再双击桌面“豆包工作皮肤”里的“启动豆包工作.command”。'
+print '\n安装完成。请保存工作，等 Agent 当前任务结束，再从启动台打开「豆包换肤」App（推荐，可拖到 Dock，无需确认）；也可双击桌面“豆包换肤”里的“启动豆包工作.command”。'

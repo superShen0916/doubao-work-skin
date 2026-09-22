@@ -59,6 +59,18 @@ function checkStyles(themes) {
   for (const { id, css, legacy } of themes) {
     style.textContent = css;
     const label = message => `${id}: ${message}`;
+    for (const linkId of ["received-link", "sent-link", "received-resource", "sent-resource", "editor-link", "editor-resource"]) {
+      check(getComputedStyle(byId(linkId)).backgroundColor !== "rgba(0, 0, 0, 0)", label(`${linkId} 应有可识别的背景`));
+      byId(linkId).focus();
+      check(document.activeElement === byId(linkId), label(`${linkId} 应保留键盘焦点`));
+    }
+    for (const linkId of ["received-resource-link", "sent-resource-link", "editor-resource-link"]) {
+      const computed = getComputedStyle(byId(linkId));
+      check(computed.backgroundColor === "rgba(0, 0, 0, 0)", label(`${linkId} 不应重复叠加背景`));
+      check(computed.paddingLeft === "0px" && computed.paddingRight === "0px", label(`${linkId} 不应重复叠加间距`));
+    }
+    check(getComputedStyle(byId("editor-link")).paddingLeft === "0px", label("编辑器链接不应增加水平间距"));
+    check(getComputedStyle(byId("received-link")).paddingLeft === "4px", label("消息链接应保留阅读间距"));
     for (const decoration of document.querySelectorAll(".decoration")) {
       const computed = getComputedStyle(decoration);
       check(computed.backgroundColor === "rgba(0, 0, 0, 0)", label("装饰层背景应保持透明"));
@@ -92,7 +104,7 @@ function checkStyles(themes) {
   byId("result").textContent = JSON.stringify({ themes: themes.length, failures });
 }
 
-test("浏览器验证全部主题：装饰层隔离、运行状态条与嵌套菜单", async t => {
+test("浏览器验证全部主题：链接、文档卡片、装饰层隔离、运行状态条与嵌套菜单", async t => {
   if (!(await browserExists())) {
     if (process.env.DWS_TEST_BROWSER) throw new Error(`指定的浏览器不存在: ${browser}`);
     t.skip(`未安装 Chrome（${browser}）；可通过 DWS_TEST_BROWSER 指定 Chromium 可执行文件`);
@@ -122,10 +134,25 @@ test("浏览器验证全部主题：装饰层隔离、运行状态条与嵌套�
       <div data-radix-popper-content-wrapper><div id="wrapped-menu" role="menu">浮层菜单</div></div>
       <div id="inputs"><div class="flex-col-reverse input-guidance">
         <div class="decoration z-[-1]"><span>装饰</span></div>
-        <div data-testid="chat_input"><div class="guidance-input-surface">输入框</div></div>
+        <div data-testid="chat_input"><div class="guidance-input-surface">
+          <div data-testid="chat_input_input"><div contenteditable="true">
+            <a id="editor-link" href="#" tabindex="0">输入链接</a>
+            <span id="editor-resource" class="resource-label" tabindex="0"><a id="editor-resource-link" href="#">文档</a></span>
+          </div></div>
+        </div></div>
         <div class="decoration z-[-1]"><span>装饰</span></div>
         <div id="status">正在生成 <button id="status-button">停止</button></div>
       </div></div>
+      <div style="position:absolute;top:600px">
+        <div data-testid="receive_message"><div data-testid="message_text_content">
+          <a id="received-link" href="#">链接<strong>加粗内容</strong></a>
+          <span id="received-resource" class="resource-label" tabindex="0"><a id="received-resource-link" href="#">文档</a></span>
+        </div></div>
+        <div data-testid="send_message"><div data-testid="message_text_content">
+          <a id="sent-link" href="#">链接<strong>加粗内容</strong></a>
+          <span id="sent-resource" class="resource-label" tabindex="0"><a id="sent-resource-link" href="#">文档</a></span>
+        </div></div>
+      </div>
       <pre id="result"></pre>
       <div id="personal-card"></div><div id="dialog" role="dialog" style="position:fixed;left:800px;top:400px"></div>
       <script>(${checkStyles.toString()})(${JSON.stringify(themes).replaceAll("<", "\\u003c")})</script>

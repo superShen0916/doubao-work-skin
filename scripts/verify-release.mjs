@@ -23,60 +23,64 @@ export async function verifyRelease(args = []) {
     if (!notes.trim()) throw new Error("发布说明不能为空");
     if (args[0] === "--tag-only") return;
   }
-  execFileSync("python3", ["-c", `
+  // 跨平台找 python
+  const python = (() => { for (const b of ["python3", "python"]) { try { execFileSync(b, ["--version"], { stdio: "ignore" }); return b; } catch {} } throw new Error("需要 python3 或 python"); })();
+  execFileSync(python, ["-c", `
 from pathlib import Path
 import hashlib, sys, zipfile
 root, version = Path(sys.argv[1]), sys.argv[2]
-# 公共文件
+
+def bytes_for(p):
+    return p.read_bytes()
+
+# 各包期望清单（相对包根）
 common = ['skin.mjs', 'src', 'skins', 'README.md', 'AGENTS.md', 'CONTRIBUTING.md', 'RELEASING.md', 'SECURITY.md', 'LICENSE', 'package.json', 'scripts/install.mjs', 'scripts/installed-cli.mjs']
+mac_top = ['安装皮肤.command', '启动豆包工作.command', 'assets/AppIcon.icns']
+win_top = ['安装皮肤.cmd', '安装皮肤.ps1', 'assets/AppIcon.ico']
+skill_top = ['安装皮肤.command', '安装皮肤.cmd', '安装皮肤.ps1', '启动豆包工作.command', 'assets/AppIcon.icns', 'assets/AppIcon.ico']
 
-def collect(names):
-    expected = {}
-    for name in names:
+def expected_map(roots):
+    out = {}
+    for name in roots:
         source = root / name
-        for file in sorted(source.rglob('*')) if source.is_dir() else [source]:
-            if file.is_file():
-                expected[file.relative_to(root).as_posix()] = file.read_bytes()
-    return expected
+        if source.is_dir():
+            for file in sorted(source.rglob('*')):
+                if file.is_file():
+                    out[file.relative_to(root).as_posix()] = bytes_for(file)
+        else:
+            out[name] = bytes_for(source)
+    return out
 
-mac_expected = collect(common + ['安装皮肤.command', '启动豆包工作.command'])
+mac_expected = expected_map(common + mac_top)
 mac_expected['先看这里.txt'] = None
-win_expected = collect(common + ['安装皮肤.cmd', '安装皮肤.ps1'])
+win_expected = expected_map(common + win_top)
 win_expected['先看这里.txt'] = None
+skill_expected = expected_map(common + skill_top)
 
-for filename, prefix, expected, check_exec in [
-    (f'DoubaoWorkSkin-{version}-macos-scripts.zip', '豆包工作皮肤/', mac_expected, True),
-    (f'DoubaoWorkSkin-{version}-windows-scripts.zip', '豆包工作皮肤-windows/', win_expected, False),
-]:
+checks = [
+    (f'DoubaoWorkSkin-{version}-macos-scripts.zip', '豆包换肤/', mac_expected, ['.command']),
+    (f'DoubaoWorkSkin-{version}-windows-scripts.zip', '豆包换肤/', win_expected, []),
+    (f'doubao-work-skin-{version}-skill.zip', 'doubao-work-skin/assets/project/', skill_expected, []),
+]
+for filename, prefix, expected, exec_exts in checks:
     archive = root / 'dist' / filename
     checksum = hashlib.sha256(archive.read_bytes()).hexdigest()
     assert Path(str(archive) + '.sha256').read_text() == f'{checksum}  {filename}\\n', 'SHA-256 不一致'
     with zipfile.ZipFile(archive) as z:
         assert z.testzip() is None, 'ZIP CRC 错误'
         files = {prefix + key: value for key, value in expected.items()}
-        assert len(z.namelist()) == len(files) and set(z.namelist()) == set(files), f'发布文件清单不一致: {filename}'
+        if 'skill' in filename:
+            files['doubao-work-skin/SKILL.md'] = bytes_for(root / 'skills/doubao-work-skin/SKILL.md')
+        assert len(z.namelist()) == len(files), f'{filename} 条目数不符: {len(z.namelist())} vs {len(files)}'
+        assert set(z.namelist()) == set(files), f'{filename} 清单不一致'
         for name, content in files.items():
             if content is not None:
-                assert z.read(name) == content, f'发布文件与源码不一致: {name}'
+                assert z.read(name) == content, f'{filename} 与源码不一致: {name}'
             else:
-                assert z.read(name), f'空文件: {name}'
-            if check_exec and name.endswith('.command'):
-                assert (z.getinfo(name).external_attr >> 16) & 0o111, f'缺少执行权限: {name}'
-    print(f'校验通过: {filename}（SHA-256、CRC、完整文件清单、源码一致性）')
-
-# Skill 包（使用 macOS payload）
-skill_archive = root / 'dist' / f'doubao-work-skin-{version}-skill.zip'
-skill_checksum = hashlib.sha256(skill_archive.read_bytes()).hexdigest()
-assert Path(str(skill_archive) + '.sha256').read_text() == f'{skill_checksum}  doubao-work-skin-{version}-skill.zip\\n', 'Skill SHA-256 不一致'
-with zipfile.ZipFile(skill_archive) as z:
-    assert z.testzip() is None, 'Skill ZIP CRC 错误'
-    skill_files = {'doubao-work-skin/assets/project/' + key: value for key, value in mac_expected.items()}
-    skill_files['doubao-work-skin/SKILL.md'] = (root / 'skills/doubao-work-skin/SKILL.md').read_bytes()
-    assert len(z.namelist()) == len(skill_files) and set(z.namelist()) == set(skill_files), 'Skill 文件清单不一致'
-    for name, content in skill_files.items():
-        if content is not None:
-            assert z.read(name) == content, f'Skill 文件与源码不一致: {name}'
-print(f'校验通过: doubao-work-skin-{version}-skill.zip（SHA-256、CRC、完整文件清单、源码一致性）')
+                assert z.read(name), f'{filename} 空文件: {name}'
+            if any(name.endswith(e) for e in exec_exts):
+                assert (z.getinfo(name).external_attr >> 16) & 0o111, f'{filename} 缺少执行权限: {name}'
+    print(f'校验通过: {filename}（SHA-256、CRC、完整清单、源码一致性、执行权限）')
 `, ROOT, version], { stdio: "inherit" });
 }
 

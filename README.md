@@ -1,20 +1,18 @@
 # Doubao Work Skin
 
-为「豆包工作」桌面端提供 13 套皮肤，支持 macOS 和 Windows，可通过 Agent 切换和定制。输入框发送按钮等控件自动适配各主题强调色。主题以临时样式注入，不修改应用安装包，可恢复官方外观。
+为「豆包工作」桌面端提供 13 套皮肤，支持 macOS 与 Windows，可通过 Agent 切换和定制。输入框发送按钮等控件自动适配各主题强调色。主题以临时样式注入，不修改应用安装包，可恢复官方外观。
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
 ## 快速开始
 
-**macOS**：需要 macOS 13.5 或更新版本（Apple 芯片或 Intel），豆包工作安装在 `/Applications/DoubaoWork.app`。
+> **Windows**：需要 Windows 10 1809+（x64）。**已实测**：官网桌面 EXE 版（%LOCALAPPDATA%\\DoubaoWork\\Application\\app\\DoubaoWork.exe）。**未实测**：Microsoft Store 版 / ARM64 / 其他发行版——代码含 Store 激活分支但无真机验收，勿视为已支持。
 
-**Windows**：需要 Windows 10 1809 或更新版本（x64），支持桌面 EXE 版和 Microsoft Store 版豆包工作。桌面版对调试参数支持最可靠，Store 版会自动尝试兼容启动。
-
-安装器会自动准备专用运行环境，无需预先安装 Node.js、Git 或其他开发工具。
+需要 **macOS 13.5 或更新版本**（Apple 芯片或 Intel），豆包工作安装在 `/Applications/DoubaoWork.app`。安装器会自动准备专用运行环境，无需预先安装 Node.js、Git 或 Homebrew。
 
 将下面这段话发送给能够操作本机的豆包工作：
 
-> 请根据 https://github.com/superShen0916/doubao-work-skin 的 README 和 AGENTS.md，帮我安装并启用豆包工作皮肤，换成「晴窗猫咪」。已经安装就直接复用；如果需要重启，请告诉我操作步骤，应用后验证是否生效。
+> 请根据 https://github.com/superShen0916/doubao-work-skin 的 README 和 AGENTS.md，帮我安装并启用豆包换肤，换成「晴窗猫咪」。已经安装就直接复用；如果需要重启，请告诉我操作步骤，应用后验证是否生效。
 
 项目提供 [Agent 操作指南](./AGENTS.md)，涵盖下载、安装、切换和验证。Agent 需要能够访问仓库并在你的 Mac 上执行命令；对话安装目前处于实验阶段，仍需在豆包工作中验证完整流程。首次启用可能需要按提示手动重启应用。
 
@@ -28,9 +26,11 @@
 
 ## 安装与日常使用
 
-首次启用可能需要重启豆包工作。安装完成后，按提示保存工作，等待当前任务结束，再双击桌面“豆包工作皮肤”文件夹中的 **`启动豆包工作.command`**。重新打开后回到原对话继续换肤。
+> 以下安装与启动流程主要面向 **macOS**（`.command` / `豆包换肤.app` / Dock / 启动台）。Windows 用户直接跳到下方 [Windows 安装与使用](#windows-安装与使用)。
 
-以后通过这个桌面入口启动应用，会使用上次成功应用的皮肤。在已建立上下文的对话中，可以直接说：
+首次启用可能需要重启豆包工作。安装完成后，按提示保存工作，等待当前任务结束，再从 **启动台** 或 **应用程序** 文件夹打开「豆包换肤」App（macOS 安装时自动创建到 `~/Applications/豆包换肤.app`，可拖到 Dock）。App 会智能判断：应用未运行时直接启动带皮肤；启动成功后激活窗口；已运行但启动失败时自动重试一次，并在需要时直接重启，无需确认。重新打开后回到原对话继续换肤。
+
+也可以双击桌面"豆包换肤"文件夹中的 **`启动豆包工作.command`**（macOS；需要重启时会询问确认）。以后通过 App 或桌面入口启动应用，都会使用上次成功应用的皮肤。在已建立上下文的对话中，可以直接说：
 
 - “换成海风微语。”
 - “有哪些皮肤？”
@@ -39,23 +39,30 @@
 
 新对话需要提供工具位置时，双击桌面文件夹中的 **`复制换肤提示词.command`**，将复制的内容粘贴到对话中即可。
 
-### 手动安装
-
-**macOS：**
+### 手动安装（macOS）
 
 1. 从 [GitHub Releases](https://github.com/superShen0916/doubao-work-skin/releases) 下载 `DoubaoWorkSkin-<版本>-macos-scripts.zip`，或下载本仓库源码 ZIP，完整解压。
 2. 双击 **`安装皮肤.command`**，等待安装完成。首次安装需要联网，安装过程不会退出豆包工作。
-3. 双击桌面"豆包工作皮肤"文件夹中的 **`启动豆包工作.command`**。需要重启时，先保存工作并等待当前 Agent 任务结束，再输入 `y` 确认。
+3. 从启动台打开「豆包换肤」App，或双击桌面”豆包换肤”文件夹中的 **`启动豆包工作.command`**。App 无需确认，会自动处理重启；`.command` 方式需要重启时会询问确认。
 
-**Windows：**
+首次启动默认使用「海风微语」。安装完成后，原始下载目录可以移动或删除。macOS 或公司设备策略可能要求额外确认或限制脚本运行。
 
-1. 从 [GitHub Releases](https://github.com/superShen0916/doubao-work-skin/releases) 下载 `DoubaoWorkSkin-<版本>-windows-scripts.zip`，完整解压。
-2. 双击 **`安装皮肤.cmd`**，等待安装完成。首次安装需要联网下载专用 Node.js 运行环境。
-3. 双击桌面"豆包工作皮肤"文件夹中的 **`启动豆包工作.cmd`**。需要重启时，先保存工作并等待当前 Agent 任务结束。
+若桌面入口未创建成功，可在 Finder 中选择”前往 → 前往文件夹”，打开 `~/Library/Application Support/DoubaoWorkSkin/启动入口/`。这里有相同的启动、恢复和复制提示词文件。启动 App 位于 `~/Applications/豆包换肤.app`。
 
-首次启动默认使用「海风微语」。安装完成后，原始下载目录可以移动或删除。
+### Windows 安装与使用
 
-若桌面入口未创建成功，macOS 可在 Finder 中选择"前往 → 前往文件夹"，打开 `~/Library/Application Support/DoubaoWorkSkin/启动入口/`；Windows 可在资源管理器地址栏输入 `%LOCALAPPDATA%\DoubaoWorkSkin\启动入口\`。
+要求 **Windows 10 1809 或更新（x64）**，豆包工作为官网桌面 EXE 版。Microsoft Store 版与 ARM64 未真机验收。
+
+1. 从 [GitHub Releases](https://github.com/superShen0916/doubao-work-skin/releases) 下载 `DoubaoWorkSkin-<版本>-windows-scripts.zip`，或下载本仓库源码 ZIP，完整解压。
+2. 双击 **`安装皮肤.cmd`**（会调用同目录 `安装皮肤.ps1`），按提示操作；首次安装联网下载专用运行时，不需要预先安装 Node.js 或 Git。
+3. 安装完成后，按提示保存工作、等待当前任务结束，再双击桌面新建的 **「豆包工作皮肤」快捷方式（`.lnk`）** 启动。它会静默应用上次选择的皮肤，需要重启时自动处理一次，无需黑框确认。
+
+日常使用：
+
+- 换肤/切换/验证仍可在对话中用自然语言完成（”换成海风微语”、”恢复官方外观”）。
+- **恢复官方外观**：双击桌面「恢复官方外观.cmd」，或运行固定入口的 `skin disable`。
+- 个人皮肤与程序数据位于 `%LOCALAPPDATA%\DoubaoWorkSkin\`（日志在其下 `launcher.log`），升级时保留，不会被覆盖。
+- 桌面 `.lnk` 指向静默 PowerShell 启动器；需要在控制台手动排查时，可运行 `启动豆包工作.cmd`（需要重启时会用 `choice` 询问一次）。
 
 ### 可选：Skill
 
@@ -114,6 +121,10 @@
 
 制作规范见 [Agent 操作说明](./AGENTS.md#创建与调整自定义皮肤)。
 
+### 自定义 App 图标
+
+想换「豆包换肤」启动器的图标？右键 `~/Applications/豆包换肤.app` → 显示简介，把喜欢的图片拖到简介窗口左上角的小图标上即可，不用重新安装。
+
 ## 从源码运行
 
 面向开发者，需要 Node.js ≥ 22，无第三方运行依赖，无需 `npm install`。以下命令适用于完整源码仓库；脚本发布包和 Skill 包用于安装，不包含完整开发工具。下载并解压源码后，在项目目录执行：
@@ -170,7 +181,7 @@ node skin.mjs restore           # 停止守护、恢复外观并清除状态
 
 **重新打开豆包工作后，皮肤为什么消失了？**
 
-从 Dock 或 Finder 普通启动不会保留换肤所需的调试参数。请保存工作，使用桌面“豆包工作皮肤”中的启动入口，按提示重启。源码用户可使用 `npm start`。后台进程存在不代表当前窗口的皮肤已生效，Agent 需通过 `verify` 检查。
+从 Dock 或 Finder 普通启动不会保留换肤所需的调试参数。请保存工作，使用「豆包换肤」App（`~/Applications/豆包换肤.app`）或桌面“豆包换肤”中的启动入口启动。App 会自动处理重启，无需确认；`.command` 方式需要重启时会询问。源码用户可使用 `npm start`。后台进程存在不代表当前窗口的皮肤已生效，Agent 需通过 `verify` 检查。
 
 **主题异常或页面无响应怎么办？**
 
@@ -180,17 +191,17 @@ node skin.mjs restore           # 停止守护、恢复外观并清除状态
 
 从 [最新正式版](https://github.com/superShen0916/doubao-work-skin/releases/latest) 下载完整包并重新运行安装脚本，或请 Agent 更新。个人皮肤和上次选择会保留，已有背景、配色和主题专属样式文件不会被覆盖。
 
-从 v2.2.2 起，程序在加载主题时自动兼容旧内置主题及其个人副本中的状态条和菜单规则，修复输入框多余边框及子菜单裁剪；无需手工修改 `skin.css`。这不代表所有未来的主题设计变化都会自动同步。更新完成后，通过桌面入口启动，或让 Agent 重新应用皮肤并验证。GitHub 发布新版不会自动更新本机安装。
+从 v2.2.2 起，程序在加载主题时自动兼容旧内置主题及其个人副本中的状态条和菜单规则，修复输入框多余边框及子菜单裁剪；无需手工修改 `skin.css`。这不代表所有未来的主题设计变化都会自动同步。更新完成后，通过「豆包换肤」App 或桌面入口启动，或让 Agent 重新应用皮肤并验证。GitHub 发布新版不会自动更新本机安装。
 
 **如何恢复和卸载？**
 
-双击桌面“恢复官方外观.command”即可停止注入并恢复外观；关闭调试接口还需完全退出应用。卸载时先恢复并退出，备份个人皮肤，再删除 `~/Library/Application Support/DoubaoWorkSkin/` 和桌面快捷文件夹。
+双击桌面“恢复官方外观.command”即可停止注入并恢复外观；关闭调试接口还需完全退出应用。卸载时先恢复并退出，备份个人皮肤，再删除 `~/Library/Application Support/DoubaoWorkSkin/`、桌面快捷文件夹和 `~/Applications/豆包换肤.app`。
 
 源码用户应先在原项目目录执行 `npm stop`；应用已退出或 CDP 不可用时，使用 `npm stop -- --keep-appearance` 停止残留后台进程。确认进程已停止后，再删除项目及上述用户数据目录。
 
 **支持 Windows 或 Linux 吗？**
 
-支持 Windows 10 1809+（x64），包括桌面 EXE 版和 Microsoft Store 版豆包工作。Linux 暂不支持。
+支持 **macOS** 与 **Windows**（Windows 安装见上文 [Windows 安装与使用](#windows-安装与使用)）。Windows 已实测官网桌面 EXE 版；Microsoft Store 版与 ARM64 未真机验收。Linux 暂不支持。
 
 ## 开发与贡献
 
@@ -199,7 +210,7 @@ npm run check   # 语法、JSON、主题配置与资源检查
 npm test        # 行为与失败路径回归测试
 ```
 
-CI 使用 macOS + Windows，Node.js 22 / 24，测试不连接真实应用。
+CI 使用 macOS 与 Windows + Node.js 22 / 24，测试不连接真实应用。
 
 | 文档 | 用途 |
 | --- | --- |

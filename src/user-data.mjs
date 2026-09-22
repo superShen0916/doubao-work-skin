@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { paths as platformPaths, shellQuote, generateCliEntry, ensurePrivateDir } from "./platform/index.mjs";
+import { paths as platformPaths, shellQuote as shellQuoteImpl, generateCliEntry, ensurePrivateDir } from "./platform/index.mjs";
+export const shellQuote = shellQuoteImpl;
 
 export const defaultDataRoot = platformPaths().dataRoot;
 export const defaultEnginePath = path.join(defaultDataRoot, "engine");

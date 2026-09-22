@@ -6,16 +6,23 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { install, launcherScripts } from "../scripts/install.mjs";
+import { install, installTargets, launcherApp, launcherScripts as macLauncherScripts } from "../scripts/install.mjs";
+import * as platform from "../src/platform/index.mjs";
+const launcherScripts = process.platform === "win32" ? platform.launcherScripts : (await import("../scripts/install.mjs")).launcherScripts;
 
 const exec = promisify(execFile);
 
-test("经符号链接打开的项目仍实际运行 CLI，而非静默退出", async () => {
+test("经符号链接打开的项目仍实际运行 CLI，而非静默退出", async (t) => {
   const temp = await fs.mkdtemp(path.join(os.tmpdir(), "dws-link-"));
   try {
     const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
     const alias = path.join(temp, "project-link");
-    await fs.symlink(repo, alias);
+    try {
+      await fs.symlink(repo, alias);
+    } catch (error) {
+      if (error.code === "EPERM") { t.skip("当前环境不允许创建符号链接"); return; }
+      throw error;
+    }
     const { stdout } = await exec(process.execPath, [path.join(alias, "skin.mjs"), "list"], { env: { ...process.env, DWS_STATE_ROOT: path.join(temp, "state") } });
     assert.match(stdout, /海风微语/);
     assert.match(stdout, /晴窗猫咪/);
@@ -123,7 +130,7 @@ test("桌面存在同名文件时保留原文件；未知引擎目录不覆盖",
   });
 });
 
-test("非交互调用启动入口时不会自动强制重启宿主应用", async () => {
+test("用户入口：exit 2 自动重试一次 start --force；mac 非交互仍不 force", async () => {
   await fixture(async options => {
     const isWin = process.platform === "win32";
     const command = path.join(options.projectRoot, isWin ? "fake-cli.cmd" : "fake-cli");
@@ -141,6 +148,265 @@ test("非交互调用启动入口时不会自动强制重启宿主应用", async
     } else {
       await assert.rejects(exec("/bin/zsh", [launcher], { env: { ...process.env, DWS_TEST_CALLS: calls } }), error => error.code === 2);
     }
-    assert.equal(await fs.readFile(calls, "utf8"), "start\n");
+    // Windows echo 会带尾随空格和 CRLF，归一化后再断言（mac 为 "start\n"）
+    const callsContent = (await fs.readFile(calls, "utf8")).replace(/\r/g, "").trim();
+    assert.equal(callsContent.replace(/\s+/g, " "), process.platform === "win32" ? "start start --force" : "start");
+  });
+});
+
+
+test("installTargets：win32 计划选 powershell+ps1 / 豆包工作皮肤.lnk / AppIcon.ico，不建 app", () => {
+  const plan = installTargets("win32", { shortcuts: "C:\\dws\\启动入口", engine: "C:\\dws\\engine", applicationsDir: "C:\\Users\\u\\Applications" });
+  assert.equal(plan.launcherSource, "platform");
+  assert.equal(plan.desktop.kind, "lnk");
+  assert.equal(plan.desktop.name, "豆包工作皮肤");
+  assert.match(plan.desktop.target, /powershell\.exe$/);
+  assert.match(plan.desktop.shortcutArguments, /-WindowStyle Hidden/);
+  assert.match(plan.desktop.shortcutArguments, /启动豆包工作皮肤\.ps1/);
+  assert.match(plan.desktop.legacyCmdPath, /启动豆包工作\.cmd$/);
+  assert.match(plan.desktop.iconPath, /AppIcon\.ico$/);
+  assert.equal(plan.launcherApp, null);
+  assert.equal(plan.iconAsset, "assets/AppIcon.ico");
+});
+
+test("installTargets：darwin 计划选 .command / 豆包换肤 symlink / AppIcon.icns / createLauncherApp", () => {
+  const plan = installTargets("darwin", { shortcuts: "/Users/u/Library/Application Support/dws/启动入口", engine: "/Users/u/.../engine", applicationsDir: "/Users/u/Applications" });
+  assert.equal(plan.launcherSource, "mac");
+  assert.equal(plan.desktop.kind, "symlink");
+  assert.equal(plan.desktop.name, "豆包换肤");
+  assert.equal(plan.desktop.target, "/Users/u/Library/Application Support/dws/启动入口");
+  assert.ok(plan.launcherApp);
+  assert.equal(plan.launcherApp.applicationsDir, "/Users/u/Applications");
+  assert.equal(plan.iconAsset, "assets/AppIcon.icns");
+});
+
+test("launcherApp：plist 含 bundle identifier 与 AppIcon，executable 为 zsh 且不硬编码 open/pgrep 路径", () => {
+  const app = launcherApp({ command: "/opt/homebrew/bin/node /tmp/cli.mjs", version: "2.2.4" });
+  assert.match(app.infoPlist, /com\.doubaowork\.skin\.launcher/);
+  assert.match(app.infoPlist, /AppIcon/);
+  assert.match(app.executable, /^#!\/bin\/zsh/);
+  assert.match(app.executable, /DWS_TEST_PGREP/);
+  assert.match(app.executable, /DWS_TEST_OPEN/);
+  // 不应把平台路径硬编码进输出（留给环境变量覆盖）
+  assert.doesNotMatch(app.executable, /^.*\/usr\/bin\/pgrep.*DWS/);
+});
+
+test("launcherScripts：darwin 产物为 .command 三件套，不含 .cmd", () => {
+  const scripts = macLauncherScripts("/usr/local/bin/node /tmp/cli.mjs");
+  assert.ok(scripts["启动豆包工作.command"]);
+  assert.ok(scripts["恢复官方外观.command"]);
+  assert.ok(scripts["复制换肤提示词.command"]);
+  assert.equal(scripts["启动豆包工作.cmd"], undefined);
+  assert.match(scripts["启动豆包工作.command"], /read -r 'answer/);
+});
+
+// 以下为 v2.2.5 合入的 macOS Launcher 用例：仅在 darwin 执行，
+// 其他平台（如 Windows）直接跳过，避免运行 zsh/osascript 或构造 .app bundle。
+
+test("安装时创建启动 App，包含智能启动脚本和图标", async () => {
+  if (process.platform !== "darwin") return;
+  await fixture(async options => {
+    const applicationsDir = path.join(options.dataRoot, "..", "Applications");
+    // 准备有效 package.json 和图标资源
+    await fs.writeFile(path.join(options.projectRoot, "package.json"), '{"version":"2.2.2","type":"module"}');
+    await fs.mkdir(path.join(options.projectRoot, "assets"), { recursive: true });
+    await fs.writeFile(path.join(options.projectRoot, "assets/AppIcon.icns"), "fake-icns-bytes");
+    await install({ ...options, applicationsDir });
+    const appPath = path.join(applicationsDir, "豆包换肤.app");
+    // 验证目录结构
+    assert.ok(await fs.stat(path.join(appPath, "Contents/Info.plist")).then(() => true, () => false));
+    assert.ok(await fs.stat(path.join(appPath, "Contents/MacOS/Launcher")).then(() => true, () => false));
+    assert.ok(await fs.stat(path.join(appPath, "Contents/Resources/AppIcon.icns")).then(() => true, () => false));
+    // 验证可执行权限
+    assert.equal((await fs.stat(path.join(appPath, "Contents/MacOS/Launcher"))).mode & 0o777, 0o755);
+    // 验证 Info.plist 内容
+    const plist = await fs.readFile(path.join(appPath, "Contents/Info.plist"), "utf8");
+    assert.ok(plist.includes("com.doubaowork.skin.launcher"));
+    assert.ok(plist.includes("豆包换肤"));
+    assert.ok(plist.includes("2.2.2"));
+    // 验证启动脚本包含智能启动逻辑
+    const launcher = await fs.readFile(path.join(appPath, "Contents/MacOS/Launcher"), "utf8");
+    assert.ok(launcher.includes('"$PGREP" -f'));
+    assert.ok(launcher.includes("start --force"));
+    assert.ok(!launcher.includes("read -r")); // 不包含交互式确认
+  });
+});
+
+test("已存在本项目创建的 App 时覆盖重建", async () => {
+  if (process.platform !== "darwin") return;
+  await fixture(async options => {
+    const applicationsDir = path.join(options.dataRoot, "..", "Applications");
+    await fs.writeFile(path.join(options.projectRoot, "package.json"), '{"version":"2.2.2","type":"module"}');
+    await fs.mkdir(path.join(options.projectRoot, "assets"), { recursive: true });
+    await fs.writeFile(path.join(options.projectRoot, "assets/AppIcon.icns"), "icns-v1");
+    // 先创建一个旧版本的 App
+    await install({ ...options, applicationsDir });
+    const appPath = path.join(applicationsDir, "豆包换肤.app");
+    const oldPlist = await fs.readFile(path.join(appPath, "Contents/Info.plist"), "utf8");
+    assert.ok(oldPlist.includes("2.2.2"));
+    // 修改版本号，重新安装，应覆盖
+    await fs.writeFile(path.join(options.projectRoot, "package.json"), '{"version":"2.3.0","type":"module"}');
+    await fs.writeFile(path.join(options.projectRoot, "assets/AppIcon.icns"), "icns-v2");
+    await install({ ...options, applicationsDir });
+    const newPlist = await fs.readFile(path.join(appPath, "Contents/Info.plist"), "utf8");
+    assert.ok(newPlist.includes("2.3.0"));
+    assert.ok(!newPlist.includes("2.2.2"));
+  });
+});
+
+test("已存在非本项目的同名 App 时跳过不覆盖", async () => {
+  if (process.platform !== "darwin") return;
+  await fixture(async options => {
+    const applicationsDir = path.join(options.dataRoot, "..", "Applications");
+    await fs.writeFile(path.join(options.projectRoot, "package.json"), '{"version":"2.2.2","type":"module"}');
+    await fs.mkdir(path.join(options.projectRoot, "assets"), { recursive: true });
+    await fs.writeFile(path.join(options.projectRoot, "assets/AppIcon.icns"), "icns");
+    // 预先创建一个非本项目的同名 App
+    const appPath = path.join(applicationsDir, "豆包换肤.app");
+    await fs.mkdir(path.join(appPath, "Contents"), { recursive: true });
+    await fs.writeFile(path.join(appPath, "Contents/Info.plist"), '<?xml version="1.0"?><plist><dict><key>CFBundleIdentifier</key><string>com.other.app</string></dict></plist>');
+    await install({ ...options, applicationsDir });
+    // 应保留原 App，不被覆盖
+    const plist = await fs.readFile(path.join(appPath, "Contents/Info.plist"), "utf8");
+    assert.ok(plist.includes("com.other.app"));
+    assert.ok(!plist.includes("com.doubaowork.skin.launcher"));
+  });
+});
+
+test("assets/AppIcon.icns 不存在时 App 仍创建但无图标", async () => {
+  if (process.platform !== "darwin") return;
+  await fixture(async options => {
+    const applicationsDir = path.join(options.dataRoot, "..", "Applications");
+    await fs.writeFile(path.join(options.projectRoot, "package.json"), '{"version":"2.2.2","type":"module"}');
+    // 不创建 assets 目录
+    await install({ ...options, applicationsDir });
+    const appPath = path.join(applicationsDir, "豆包换肤.app");
+    assert.ok(await fs.stat(path.join(appPath, "Contents/Info.plist")).then(() => true, () => false));
+    assert.ok(await fs.stat(path.join(appPath, "Contents/MacOS/Launcher")).then(() => true, () => false));
+    // 图标文件不存在
+    assert.ok(!(await fs.stat(path.join(appPath, "Contents/Resources/AppIcon.icns")).then(() => true, () => false)));
+  });
+});
+
+test("launcherApp 未传 version 时回退到 1.0.0", async () => {
+  if (process.platform !== "darwin") return;
+  await fixture(async options => {
+    const applicationsDir = path.join(options.dataRoot, "..", "Applications");
+    // package.json 内容是 "fixture"（无效 JSON），但 App 创建被 try/catch 包裹
+    // 这里直接测 launcherApp 的回退逻辑
+    const app = launcherApp({ command: "/tmp/skin", version: undefined });
+    assert.ok(app.infoPlist.includes("1.0.0"));
+  });
+});
+
+test("launcherApp 生成的启动脚本通过 zsh 语法检查", async () => {
+  if (process.platform !== "darwin") return;
+  const app = launcherApp({ command: "/tmp/test skin/skin", version: "2.2.2" });
+  const tmpScript = path.join(os.tmpdir(), `dws-launcher-syntax-${process.pid}.sh`);
+  try {
+    await fs.writeFile(tmpScript, app.executable, { mode: 0o755 });
+    await exec("/bin/zsh", ["-n", tmpScript]);
+  } finally {
+    await fs.rm(tmpScript, { force: true });
+  }
+});
+
+// Launcher 行为测试：用 mock 的 pgrep/open/skin 验证各分支的调用序列
+async function runLauncherScenario({ pgrepExit = 0, statusOutput = "", startExit = 0, startForceExit = 0, detailed = false } = {}) {
+  const temp = await fs.mkdtemp(path.join(os.tmpdir(), "dws-launcher-behavior-"));
+  const callLog = path.join(temp, "calls.log");
+  const pgrepScript = path.join(temp, "mock-pgrep");
+  const openScript = path.join(temp, "mock-open");
+  const dialogScript = path.join(temp, "mock-osascript");
+  const skinScript = path.join(temp, "mock-skin");
+  await fs.writeFile(pgrepScript, `#!/bin/sh\necho "pgrep" >> "${callLog}"\nexit ${pgrepExit}\n`, { mode: 0o755 });
+  await fs.writeFile(openScript, `#!/bin/sh\necho "open $*" >> "${callLog}"\nexit 0\n`, { mode: 0o755 });
+  await fs.writeFile(dialogScript, `#!/bin/sh\necho "dialog" >> "${callLog}"\nexit 0\n`, { mode: 0o755 });
+  await fs.writeFile(skinScript, `#!/bin/sh
+echo "skin $*" >> "${callLog}"
+case "$1" in
+  status) printf '%s' "$MOCK_STATUS_OUTPUT"; exit 0;;
+  start)
+    if [ "$2" = "--force" ]; then exit "$MOCK_START_FORCE_EXIT"; fi
+    exit "$MOCK_START_EXIT";;
+  *) exit 0;;
+esac
+`, { mode: 0o755 });
+  const app = launcherApp({ command: skinScript, version: "2.2.2" });
+  const launcherScript = path.join(temp, "Launcher");
+  // 失败路径也完全隔离，测试不能在用户桌面弹出真实对话框。
+  await fs.writeFile(launcherScript, app.executable.replace('/usr/bin/osascript', `"${dialogScript}"`), { mode: 0o755 });
+  let exitCode = 0;
+  try {
+    await exec("/bin/zsh", [launcherScript], {
+      env: {
+        ...process.env,
+        DWS_TEST_PGREP: pgrepScript,
+        DWS_TEST_OPEN: openScript,
+        MOCK_STATUS_OUTPUT: statusOutput,
+        MOCK_START_EXIT: String(startExit),
+        MOCK_START_FORCE_EXIT: String(startForceExit),
+      },
+    });
+  } catch (error) {
+    exitCode = error.code;
+  }
+  const log = await fs.readFile(callLog, "utf8").catch(() => "");
+  await fs.rm(temp, { recursive: true, force: true });
+  const calls = log.trim().split("\n").filter(Boolean);
+  return detailed ? { calls, exitCode } : calls;
+}
+
+test("Launcher 行为：应用未运行时调用 skin start 成功后激活窗口", async () => {
+  if (process.platform !== "darwin") return;
+  const calls = await runLauncherScenario({ pgrepExit: 1 });
+  assert.deepEqual(calls, ["pgrep", "skin start", "open /Applications/DoubaoWork.app"]);
+});
+
+test("Launcher 行为：无皮肤但有 CDP 时调用 skin start 成功，不触发 --force", async () => {
+  if (process.platform !== "darwin") return;
+  const calls = await runLauncherScenario({
+    pgrepExit: 0,
+    statusOutput: '{"running": false,"port": 9342}',
+    startExit: 0,
+  });
+  assert.deepEqual(calls, ["pgrep", "skin start", "open /Applications/DoubaoWork.app"]);
+});
+
+test("Launcher 行为：无皮肤且无 CDP 时调用 skin start --force", async () => {
+  if (process.platform !== "darwin") return;
+  const calls = await runLauncherScenario({
+    pgrepExit: 0,
+    statusOutput: '{"running": false,"port": null}',
+    startExit: 2,
+    startForceExit: 0,
+  });
+  assert.deepEqual(calls, ["pgrep", "skin start", "skin start --force", "open /Applications/DoubaoWork.app"]);
+});
+
+test("Launcher 行为：已运行时一般启动错误也重试一次并激活窗口", async () => {
+  if (process.platform !== "darwin") return;
+  const result = await runLauncherScenario({ startExit: 1, detailed: true });
+  assert.deepEqual(result, {
+    calls: ["pgrep", "skin start", "skin start --force", "open /Applications/DoubaoWork.app"],
+    exitCode: 0,
+  });
+});
+
+test("Launcher 行为：重试失败时保留错误码并提示，不激活窗口或循环重试", async () => {
+  if (process.platform !== "darwin") return;
+  const result = await runLauncherScenario({ startExit: 1, startForceExit: 7, detailed: true });
+  assert.deepEqual(result, {
+    calls: ["pgrep", "skin start", "skin start --force", "dialog"],
+    exitCode: 7,
+  });
+});
+
+test("Launcher 行为：应用未运行且启动失败时直接提示，不强制重试", async () => {
+  if (process.platform !== "darwin") return;
+  const result = await runLauncherScenario({ pgrepExit: 1, startExit: 1, detailed: true });
+  assert.deepEqual(result, {
+    calls: ["pgrep", "skin start", "dialog"],
+    exitCode: 1,
   });
 });

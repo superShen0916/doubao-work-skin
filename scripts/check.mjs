@@ -5,6 +5,7 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { discoverThemes, loadTheme } from "../src/theme.mjs";
+import { checkSkinNoWildcardColor } from "./skin-css-check.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -28,7 +29,10 @@ try {
     if (!backgroundDataUrl?.startsWith("data:image/png;base64,iVBORw0KGgo")) throw new Error(`${name}: 背景不是 PNG`);
     console.log(`✓ ${name} (${theme.name})`);
   }
-  console.log(`检查通过：源码语法、JSON、${names.length} 套主题及背景资源`);
+  // 检查皮肤不能写通配改色规则
+  const wildcardErrors = await checkSkinNoWildcardColor(path.join(root, "skins"));
+  if (wildcardErrors.length) throw new Error(wildcardErrors.join("\n"));
+  console.log(`检查通过：源码语法、JSON、${names.length} 套主题及背景资源、皮肤无通配改色规则`);
 } catch (error) {
   console.error(`检查失败: ${error.stderr?.toString().trim() || error.message}`);
   process.exitCode = 1;

@@ -12,7 +12,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { execFile, spawn } from "node:child_process";
+import { execFile, execFileSync, spawn } from "node:child_process";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
@@ -46,13 +46,36 @@ function parsePowerShellJson(text) {
 
 // ─── 路径 ───────────────────────────────────────────────
 
+// 桌面 Known Folder 路径可能被组策略/重定向到非 %USERPROFILE%\Desktop，
+// 不能直接拼 os.homedir()/Desktop。用 [Environment]::GetFolderPath('Desktop')
+// 向 shell 查询真实路径，结果缓存到模块级变量（同一进程内不变），失败回退到 homedir。
+let _desktopDirCache = null;
+function detectDesktopDir() {
+  if (_desktopDirCache) return _desktopDirCache;
+  try {
+    const out = execFileSync(POWERSHELL, [
+      "-NoProfile", "-NonInteractive", "-Command",
+      "[Environment]::GetFolderPath('Desktop')",
+    ], { encoding: "utf8", timeout: 5_000, windowsHide: true }).trim();
+    _desktopDirCache = out || path.join(os.homedir(), "Desktop");
+  } catch {
+    _desktopDirCache = path.join(os.homedir(), "Desktop");
+  }
+  return _desktopDirCache;
+}
+
+// 仅供测试重置 Known Folder 缓存，生产代码不要调用。
+export function _resetDesktopDirCacheForTest() {
+  _desktopDirCache = null;
+}
+
 export function paths() {
   const localAppData = process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local");
   const dataRoot = process.env.DWS_STATE_ROOT || path.join(localAppData, "DoubaoWorkSkin");
   return {
     dataRoot: path.resolve(dataRoot),
     defaultSkinsDir: process.env.DWS_SKINS_DIR || "",
-    desktopDir: process.env.DWS_DESKTOP_DIR || path.join(os.homedir(), "Desktop"),
+    desktopDir: process.env.DWS_DESKTOP_DIR || detectDesktopDir(),
   };
 }
 
@@ -60,28 +83,50 @@ export function paths() {
 
 const STORE_PACKAGE_NAMES = ["*Doubao*", "*春田*", "*DouBao*"];
 const DESKTOP_CANDIDATE_PATHS = [
+  // 实机核实的真实安装布局（2026-09，桌面版）：
+  // %LOCALAPPDATA%\DoubaoWork\Application\app\DoubaoWork.exe
+  // 必须放在最前：停止应用后进程反查失效，只能靠静态路径定位。
+  path.join(process.env.LOCALAPPDATA || "", "DoubaoWork", "Application", "app", "DoubaoWork.exe"),
   path.join(process.env.LOCALAPPDATA || "", "Programs", "DoubaoWork", "DoubaoWork.exe"),
   path.join(process.env.LOCALAPPDATA || "", "Programs", "Doubao", "DoubaoWork.exe"),
   path.join(process.env.PROGRAMFILES || "", "DoubaoWork", "DoubaoWork.exe"),
   path.join(process.env["PROGRAMFILES(X86)"] || "", "DoubaoWork", "DoubaoWork.exe"),
 ];
 
+/**
+ * 从 WMI 进程行中选出豆包工作主进程行。
+ *
+ * 真实安装下所有子进程（gpu/renderer/utility/crashpad-handler）与主进程
+ * 共用同一个 DoubaoWork.exe 路径，进程名完全相同；唯一稳定区别是主进程
+ * 命令行不含 `--type=`。因此：
+ * - 不能再用 `Select-Object -First 10` 截断（子进程多达十余个，主进程可能被截掉）；
+ * - 不能只按 executablePath 匹配（子进程路径与主进程完全一致）；
+ * - 必须按"无 --type="筛主进程。
+ */
+export function pickMainProcessRow(rows) {
+  for (const row of Array.isArray(rows) ? rows : [rows]) {
+    const commandLine = String(row?.CommandLine ?? row?.command ?? "");
+    if (!/[\\/]DoubaoWork\.exe$/i.test(String(row?.ExecutablePath ?? row?.executablePath ?? ""))) continue;
+    // 命令行必须非空：空命令行通常是权限不足/信息缺失，不能冒充主进程。
+    if (!commandLine) continue;
+    if (/--type=/.test(commandLine)) continue;
+    return row;
+  }
+  return null;
+}
+
 async function discoverFromRunningProcess() {
   try {
+    // 不能 Select-Object -First 10：子进程（renderer/gpu/utility/crashpad）十余个，
+    // 主进程可能排在 10 行之外。全部取回后由 pickMainProcessRow 按 --type= 筛选。
     const script = `
       Get-CimInstance Win32_Process | Where-Object {
         $_.Name -match 'Doubao|DoubaoWork' -and $_.ExecutablePath
-      } | Select-Object -First 10 ProcessId, Name, ExecutablePath, CommandLine | ConvertTo-Json -Compress
+      } | Select-Object ProcessId, Name, ExecutablePath, CommandLine | ConvertTo-Json -Compress
     `;
     const result = parsePowerShellJson(await runPowerShell(script));
     if (!result) return null;
-    const processes = Array.isArray(result) ? result : [result];
-    // 只接受可执行文件名为 DoubaoWork.exe 的主进程，不匹配 Helper/Renderer
-    // 不回退到 processes[0]，避免把普通 Doubao.exe 或其他同前缀程序当作豆包工作
-    const main = processes.find((p) =>
-      /[\\/]DoubaoWork\.exe$/i.test(p.ExecutablePath) &&
-      !/helper|renderer|gpu-process|utility/i.test(p.CommandLine || "")
-    );
+    const main = pickMainProcessRow(result);
     if (!main) return null;
     // 根据路径判断安装类型：WindowsApps 目录下的是 Store 版
     const isStore = /[\\/]WindowsApps[\\/]/i.test(main.ExecutablePath);
@@ -334,11 +379,24 @@ export function generateCliEntry(dataRoot, nodePath, bridgePath) {
   return `@echo off\r\nchcp 65001 >nul\r\nsetlocal\r\nset NODE_OPTIONS=\r\nset NODE_PATH=\r\nset "DWS_STATE_ROOT=${dataRoot}"\r\n"${nodePath}" "${bridgePath}" %*\r\n`;
 }
 
-export function launcherScripts(command) {
+export function silentLauncherScript(command, dataRoot) {
+  const cli = String(command).replace(/'/g, "''");
+  // M11：把 dataRoot 插值进日志路径与互斥锁名，避免多份安装共用同一日志/锁。
+  // 日志默认写到 <dataRoot>\launcher.log；mutex 名按 dataRoot 派生（非法字符替换为下划线）。
+  const logDir = String(dataRoot || "").replace(/'/g, "''");
+  const mutexBase = `DoubaoWorkSkin.Launcher.${String(dataRoot || "default").replace(/[^a-zA-Z0-9]/g, "_")}`;
+  return `# 豆包工作皮肤静默启动器；由桌面快捷方式以 -WindowStyle Hidden 调用。\r\n$ErrorActionPreference = 'Stop'\r\n$cli = '${cli}'\r\n$log = if ($env:DWS_LAUNCHER_LOG) { $env:DWS_LAUNCHER_LOG } else { Join-Path '${logDir}' 'launcher.log' }\r\n$mutexName = if ($env:DWS_LAUNCHER_MUTEX) { $env:DWS_LAUNCHER_MUTEX } else { 'Local\\${mutexBase}' }\r\nfunction Write-Log($msg) {\r\n  $ts = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'\r\n  Add-Content -Path $log -Value ($ts + ' ' + $msg) -Encoding UTF8\r\n}\r\n$mutex = New-Object System.Threading.Mutex($false, $mutexName)\r\n$acquired = $false\r\ntry {\r\n  try { $acquired = $mutex.WaitOne(0) } catch [System.Threading.AbandonedMutexException] { $acquired = $true }\r\n  if (-not $acquired) { Write-Log '已有启动器在运行，静默退出'; exit 0 }\r\n  Write-Log 'start'\r\n  \u0026 $cli start \u003e\u003e $log 2\u003e\u00261\r\n  $code = $LASTEXITCODE\r\n  Write-Log (\"start exit=\" + $code)\r\n  if ($code -eq 2) {\r\n    Write-Log '需要重启，自动 start --force'\r\n    \u0026 $cli start --force \u003e\u003e $log 2\u003e\u00261\r\n    $code = $LASTEXITCODE\r\n    Write-Log (\"force exit=\" + $code)\r\n  }\r\n  if ($code -ne 0) {\r\n    Write-Log (\"失败 code=\" + $code)\r\n    if (-not $env:DWS_LAUNCHER_NO_UI) {\r\n      Add-Type -AssemblyName System.Windows.Forms\r\n      $msg = '豆包工作皮肤启动失败（错误码 ' + $code + '）。' + [Environment]::NewLine + '日志：' + $log\r\n      [System.Windows.Forms.MessageBox]::Show($msg, '豆包工作皮肤', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null\r\n    }\r\n  }\r\n  exit $code\r\n} catch {\r\n  Write-Log (\"启动器异常：\" + $_.Exception.Message)\r\n  if (-not $env:DWS_LAUNCHER_NO_UI) {\r\n    Add-Type -AssemblyName System.Windows.Forms\r\n    [System.Windows.Forms.MessageBox]::Show(('豆包工作皮肤启动失败。' + [Environment]::NewLine + '日志：' + $log), '豆包工作皮肤', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null\r\n  }\r\n  exit 1\r\n} finally {\r\n  if ($acquired) { try { $mutex.ReleaseMutex() } catch {} }\r\n  $mutex.Dispose()\r\n}\r\n`;
+}
+
+export function launcherScripts(command, dataRoot) {
   const cmd = `call "${command}"`;
   const header = "@echo off\r\nchcp 65001 >nul\r\nsetlocal\r\nset NODE_OPTIONS=\r\nset NODE_PATH=\r\n";
-  return {
-    "启动豆包工作.cmd": `${header}${cmd} start\r\nif %errorlevel% neq 2 exit /b %errorlevel%\r\necho.\r\necho 需要重启豆包工作。请保存工作，并等待 Agent 当前任务结束。\r\nset /p answer=确认已保存并重启？输入 y 后回车，其他输入取消：\r\nif /i not "%answer%"=="y" (\r\n  echo 已取消，豆包工作保持打开。\r\n  exit /b 2\r\n)\r\n${cmd} start --force\r\nexit /b %errorlevel%\r\n`,
+  const root = dataRoot || paths().dataRoot;
+  // 启动豆包工作.cmd：Agent/CI 与手动控制台入口。start 返回 2 时自动 start --force 一次。
+  // 桌面 .lnk 不再指向此 cmd（会有黑框），而是指向下方静默 ps1。
+    return {
+    "启动豆包工作.cmd": `${header}${cmd} start\r\nif %errorlevel% equ 2 (\r\n  echo 需要重启才能换肤，自动重启中...\r\n  ${cmd} start --force\r\n)\r\nexit /b %errorlevel%\r\n`,
+    "启动豆包工作皮肤.ps1": silentLauncherScript(command, root),
     "恢复官方外观.cmd": `${header}${cmd} disable\r\n`,
     "复制换肤提示词.cmd": `${header}for /f "delims=" %%i in ('${cmd} prompt') do set "PROMPT_TEXT=%%i"\r\necho %PROMPT_TEXT% | clip\r\necho 已复制，粘贴到豆包工作对话即可。\r\n`,
   };
@@ -346,37 +404,60 @@ export function launcherScripts(command) {
 
 // ─── 桌面快捷方式 ───────────────────────────────────────
 
-export async function createDesktopShortcut(targetPath, linkName, desktopDirOverride = null) {
+export async function createDesktopShortcut(targetPath, linkName, desktopDirOverride = null, options = {}) {
   const desktopDir = desktopDirOverride || paths().desktopDir;
+  const { iconPath = null, description = "", workingDir = null, legacyFolderPath = null, shortcutArguments = "", legacyCmdPath = null } = options;
   await fs.mkdir(desktopDir, { recursive: true });
   const linkPath = path.join(desktopDir, `${linkName}.lnk`);
-  // 存在性检查：已有同名 .lnk 且目标不同或无法读取时不覆盖
+  // 存在性检查：
+  // - 同名 .lnk 指向本次目标 → 覆盖（幂等/升级）
+  // - 同名 .lnk 是旧版指向"启动入口"文件夹（legacyFolderPath）→ 安全升级为直接入口
+  // - 同名 .lnk 指向其他目标 → 不覆盖
   try {
     await fs.access(linkPath);
-    // 用 WScript.Shell 读取已有快捷方式的目标
     const readScript = `
       $ws = New-Object -ComObject WScript.Shell
       $sc = $ws.CreateShortcut('${linkPath.replace(/'/g, "''")}')
-      $sc.TargetPath
+      [PSCustomObject]@{ TargetPath = $sc.TargetPath; Arguments = $sc.Arguments } | ConvertTo-Json -Compress
     `;
-    const existingTarget = (await runPowerShell(readScript, { timeout: 5_000 })).trim();
+    const existing = parsePowerShellJson(await runPowerShell(readScript, { timeout: 5_000 }));
+    const existingTarget = String(existing?.TargetPath || "").trim();
+    const existingArguments = String(existing?.Arguments || "").trim();
     if (!existingTarget) {
       throw new Error("桌面已有同名快捷方式但无法读取其目标，未覆盖");
     }
-    if (path.resolve(existingTarget) !== path.resolve(targetPath)) {
+    const fileArgument = (args) => {
+      const match = String(args || "").match(/(?:^|\s)-File\s+(?:"([^"]+)"|(\S+))/i);
+      return match ? (match[1] || match[2]) : null;
+    };
+    const samePath = (a, b) => path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase();
+    const existingFile = fileArgument(existingArguments);
+    const requestedFile = fileArgument(shortcutArguments);
+    const isCurrentShortcut = samePath(existingTarget, targetPath)
+      && (requestedFile
+        ? existingFile && samePath(existingFile, requestedFile)
+        : existingArguments === String(shortcutArguments || "").trim());
+    const isOurs = isCurrentShortcut
+      || (legacyFolderPath && samePath(existingTarget, legacyFolderPath))
+      || (legacyCmdPath && samePath(existingTarget, legacyCmdPath));
+    if (!isOurs) {
       throw new Error("桌面已有同名快捷方式指向其他目标，未覆盖");
     }
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
   }
-  // 用 WScript.Shell COM 创建 .lnk
   const script = `
     $ws = New-Object -ComObject WScript.Shell
     $shortcut = $ws.CreateShortcut('${linkPath.replace(/'/g, "''")}')
     $shortcut.TargetPath = '${targetPath.replace(/'/g, "''")}'
+    if ('${(shortcutArguments || "").replace(/'/g, "''")}') { $shortcut.Arguments = '${(shortcutArguments || "").replace(/'/g, "''")}' }
+    $shortcut.Description = '${(description || "").replace(/'/g, "''")}'
+    if ('${(workingDir || "").replace(/'/g, "''")}') { $shortcut.WorkingDirectory = '${(workingDir || "").replace(/'/g, "''")}' }
+    if ('${(iconPath || "").replace(/'/g, "''")}') { $shortcut.IconLocation = '${(iconPath || "").replace(/'/g, "''")},0' }
     $shortcut.Save()
   `;
   await runPowerShell(script, { timeout: 5_000 });
+  return linkPath;
 }
 
 // ─── 权限 ───────────────────────────────────────────────

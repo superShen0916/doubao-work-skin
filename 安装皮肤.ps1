@@ -6,6 +6,12 @@ $ProgressPreference = "SilentlyContinue"
 # 强制 TLS 1.2，避免旧系统默认 TLS 1.0/1.1 无法连接 nodejs.org
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
+# M9：仅提供 x64 运行时，ARM64 直接报错退出（不下载错架构的 node 包）。
+if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") {
+    Write-Error "本工具暂不支持 ARM64 架构（仅提供 x64 运行时）。请在 x64 Windows 上运行。"
+    exit 1
+}
+
 $projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $localAppData = [Environment]::GetFolderPath("LocalApplicationData")
 $dataRoot = if ($env:DWS_STATE_ROOT) { $env:DWS_STATE_ROOT } else { Join-Path $localAppData "DoubaoWorkSkin" }
@@ -19,6 +25,7 @@ $archivePath = Join-Path $downloadsDir $archiveName
 $doubaoPaths = @(
     (Join-Path $localAppData "Programs\DoubaoWork\DoubaoWork.exe"),
     (Join-Path $localAppData "Programs\Doubao\DoubaoWork.exe"),
+    (Join-Path $localAppData "DoubaoWork\Application\app\DoubaoWork.exe"),
     (Join-Path $env:ProgramFiles "DoubaoWork\DoubaoWork.exe"),
     (Join-Path ${env:ProgramFiles(x86)} "DoubaoWork\DoubaoWork.exe")
 )
@@ -26,10 +33,22 @@ $doubaoInstalled = $false
 foreach ($p in $doubaoPaths) {
     if (Test-Path $p) { $doubaoInstalled = $true; break }
 }
-# 也检查 Store 版
+# 也检查 Store 版（M9：Get-AppxPackage 在精简版 Windows/受限环境可能不可用，容错跳过）
 if (-not $doubaoInstalled) {
-    $storePkg = Get-AppxPackage | Where-Object { $_.Name -match "Doubao|春田" } | Select-Object -First 1
-    if ($storePkg) { $doubaoInstalled = $true }
+    try {
+        $storePkg = Get-AppxPackage | Where-Object { $_.Name -match "Doubao|春田" } | Select-Object -First 1
+        if ($storePkg) { $doubaoInstalled = $true }
+    } catch {
+        # Appx 子系统不可用，忽略，交给后续路径/进程探测
+    }
+}
+# 进程反查兜底：从运行中的 DoubaoWork.exe 主进程定位
+if (-not $doubaoInstalled) {
+    $runningExe = Get-CimInstance Win32_Process | Where-Object {
+        $_.Name -eq "DoubaoWork.exe" -and $_.ExecutablePath -and
+        $_.CommandLine -notmatch "helper|renderer|gpu-process|utility"
+    } | Select-Object -First 1
+    if ($runningExe) { $doubaoInstalled = $true }
 }
 if (-not $doubaoInstalled) {
     Write-Error "请先安装豆包工作，再双击此文件。"
@@ -91,7 +110,7 @@ try {
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     Write-Host ""
-    Write-Host "安装完成。请保存工作，等 Agent 当前任务结束，再双击桌面""豆包工作皮肤""里的""启动豆包工作.cmd""。"
+    Write-Host "安装完成。请保存工作，等 Agent 当前任务结束，再双击桌面""豆包工作皮肤""快捷方式启动。"
 } finally {
     Remove-Item -Recurse -Force $tempDir -ErrorAction SilentlyContinue
 }

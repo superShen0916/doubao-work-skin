@@ -306,6 +306,36 @@ export async function stopWatchProcess({
   return [...candidates.values()];
 }
 
+function rowPathMatchesMain(row, normalizedMain) {
+  if (row.executablePath && path.resolve(row.executablePath).toLowerCase() === normalizedMain) return true;
+  // 提取命令行中第一个可执行文件路径（去除引号包裹），兼容 Windows "C:\...\exe" --args 格式
+  const cmd = String(row.command || "");
+  const firstToken = cmd.startsWith('"')
+    ? cmd.slice(1, cmd.indexOf('"', 1))
+    : cmd.split(/\s+/)[0];
+  if (!firstToken) return false;
+  return path.resolve(firstToken).toLowerCase() === normalizedMain;
+}
+
+/**
+ * 从进程行中选出主进程 PID。
+ * 真实安装下 renderer/gpu/utility 子进程与主进程共用同一 exe 路径，
+ * 光按路径匹配会随机选到子进程。主进程必须同时满足：
+ *   1) 命令行非空（空命令行可能是权限不足/信息缺失，不能冒充主进程）；
+ *   2) 命令行不含 `--type=`。
+ * 只有子进程或命令行不明时返回 null，绝不把 renderer 当主进程（避免误杀）。
+ */
+export function pickMainDoubaoWorkPid(rows, normalizedMain) {
+  for (const row of (Array.isArray(rows) ? rows : [])) {
+    if (!rowPathMatchesMain(row, normalizedMain)) continue;
+    const command = String(row.command || "");
+    if (!command) continue;
+    if (/--type=/.test(command)) continue;
+    return row.pid;
+  }
+  return null;
+}
+
 export async function findDoubaoWorkPid({ execFileImpl = null } = {}) {
   if (execFileImpl) {
     // 测试注入：原有 pgrep 逻辑
@@ -318,19 +348,7 @@ export async function findDoubaoWorkPid({ execFileImpl = null } = {}) {
   const mainBinary = install?.mainBinary || DOUBAOWORK_BINARY;
   const mainName = path.basename(mainBinary).replace(/\.exe$/i, "");
   const rows = await listProcessesByName([mainName, `${mainName}.exe`]).catch(() => []);
-  // 优先用 executablePath 精确匹配（不受命令行引号影响），其次用命令行匹配
-  const normalizedMain = path.resolve(mainBinary).toLowerCase();
-  const match = rows.find((row) => {
-    if (row.executablePath && path.resolve(row.executablePath).toLowerCase() === normalizedMain) return true;
-    // 提取命令行中第一个可执行文件路径（去除引号包裹），兼容 Windows "C:\...\exe" --args 格式
-    const cmd = String(row.command || "");
-    const firstToken = cmd.startsWith('"')
-      ? cmd.slice(1, cmd.indexOf('"', 1))
-      : cmd.split(/\s+/)[0];
-    if (!firstToken) return false;
-    return path.resolve(firstToken).toLowerCase() === normalizedMain;
-  });
-  return match ? match.pid : null;
+  return pickMainDoubaoWorkPid(rows, path.resolve(mainBinary).toLowerCase());
 }
 
 export async function selectAvailablePort(preferred, {
@@ -362,6 +380,7 @@ export async function launchDoubaoWork({
   paths = runtimePaths,
   spawnImpl = null,
   binary = DOUBAOWORK_BINARY,
+  install = null,
 } = {}) {
   positiveInteger(port, "port");
   await ensureRuntimeRoot(paths);
@@ -369,8 +388,9 @@ export async function launchDoubaoWork({
   const stderrFd = fsSync.openSync(paths.appErrorLog, "a", 0o600);
   try {
     if (spawnImpl) {
-      // 测试注入：保持原有 spawn 接口
-      const child = spawnImpl(binary, [
+      // 测试注入：保持原有 spawn 接口；若调用方携带 install，用其 mainBinary
+      const targetBinary = install?.mainBinary || binary;
+      const child = spawnImpl(targetBinary, [
         "--remote-debugging-address=127.0.0.1",
         `--remote-debugging-port=${port}`,
       ], {
@@ -382,9 +402,10 @@ export async function launchDoubaoWork({
       child.unref?.();
       return child.pid;
     }
-    // 正常路径：通过 platform 层启动
-    const install = await discoverAppInstall();
-    if (!install) throw new Error("未找到豆包工作安装");
+    // 正常路径：调用方应在停止应用之前先 discoverAppInstall 并把 install 传进来
+    // （应用停止后进程反查为空，自定义路径也枚举不到）。未传则现场再发现一次。
+    if (!install?.mainBinary) install = await discoverAppInstall().catch(() => null);
+    if (!install) throw new Error("未找到豆包工作安装；可先正常打开一次应用让其记录位置");
     return launchApp(install, port, { logFd: stdoutFd, errorFd: stderrFd });
   } finally {
     fsSync.closeSync(stdoutFd);

@@ -9,77 +9,95 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const pkg = JSON.parse(await fs.readFile(path.join(root, "package.json"), "utf8"));
 const dist = path.join(root, "dist");
 
+// 跨平台找 python：优先 python3，回退 python
+function pythonBin() {
+  for (const bin of ["python3", "python"]) {
+    try { execFileSync(bin, ["--version"], { stdio: "ignore" }); return bin; }
+    catch {}
+  }
+  throw new Error("需要 python3 或 python 来写 ZIP（标准库 zipfile）");
+}
+
 function zipDirectory(directory, output) {
-  execFileSync("python3", ["-c", `
-import pathlib, sys, zipfile
+  execFileSync(pythonBin(), ["-c", `
+import pathlib, sys, zipfile, os
 root = pathlib.Path(sys.argv[1])
 with zipfile.ZipFile(sys.argv[2], 'w', zipfile.ZIP_DEFLATED) as archive:
     for file in sorted(root.rglob('*')):
         if file.is_file():
-            archive.write(file, file.relative_to(root.parent))
+            arc = file.relative_to(root.parent).as_posix()
+            info = zipfile.ZipInfo.from_file(file, arc)
+            with open(file, 'rb') as fh:
+                archive.writestr(info, fh.read(), zipfile.ZIP_DEFLATED)
+            if arc.endswith('.command') or arc.endswith('.sh'):
+                # 保留 Unix 执行位（Windows chmod 不写 ZIP external_attr）
+                zi = archive.getinfo(arc)
+                zi.external_attr = (0o755 & 0xFFFF) << 16
 `, directory, output]);
-}
-
-const COMMON_FILES = ["skin.mjs", "src", "skins", "README.md", "AGENTS.md", "CONTRIBUTING.md", "RELEASING.md", "SECURITY.md", "LICENSE", "package.json"];
-const SCRIPT_FILES = ["install.mjs", "installed-cli.mjs"];
-
-async function buildPayload(targetDir, platform) {
-  await fs.mkdir(targetDir, { recursive: true });
-  for (const name of COMMON_FILES) {
-    await fs.cp(path.join(root, name), path.join(targetDir, name), { recursive: true });
-  }
-  await fs.mkdir(path.join(targetDir, "scripts"));
-  for (const name of SCRIPT_FILES) {
-    await fs.copyFile(path.join(root, "scripts", name), path.join(targetDir, "scripts", name));
-  }
-  if (platform === "macos") {
-    for (const name of ["安装皮肤.command", "启动豆包工作.command"]) {
-      await fs.copyFile(path.join(root, name), path.join(targetDir, name));
-      await fs.chmod(path.join(targetDir, name), 0o755);
-    }
-    await fs.writeFile(path.join(targetDir, "先看这里.txt"), "首次使用：双击 安装皮肤.command，自动准备运行环境。\n装好后：在桌面“豆包工作皮肤”里双击启动入口。\n无需安装 Node.js、Git、Homebrew 或开发工具；首次安装需要联网。\n需要重启时请保存工作并等待当前 Agent 任务结束。\n更新：下载新版，重新双击安装文件；已有皮肤和偏好保留。\n");
-  } else if (platform === "windows") {
-    for (const name of ["安装皮肤.cmd", "安装皮肤.ps1"]) {
-      await fs.copyFile(path.join(root, name), path.join(targetDir, name));
-    }
-    await fs.writeFile(path.join(targetDir, "先看这里.txt"), "首次使用：双击 安装皮肤.cmd，自动准备运行环境。\n装好后：在桌面“豆包工作皮肤”里双击启动入口。\n无需安装 Node.js、Git 或开发工具；首次安装需要联网。\n需要重启时请保存工作并等待当前 Agent 任务结束。\n更新：下载新版，重新双击安装文件；已有皮肤和偏好保留。\n");
-  }
 }
 
 await fs.mkdir(dist, { recursive: true });
 const temp = await fs.mkdtemp(path.join(dist, ".release-"));
 try {
-  // macOS 发布包（根目录保持 豆包工作皮肤/，与校验器一致）
-  const macPayload = path.join(temp, "豆包工作皮肤");
-  await buildPayload(macPayload, "macos");
+  // ─── macOS 包 ───
+  const mac = path.join(temp, "豆包换肤");
+  await fs.mkdir(mac);
+  for (const name of ["安装皮肤.command", "启动豆包工作.command", "skin.mjs", "src", "skins", "README.md", "AGENTS.md", "CONTRIBUTING.md", "RELEASING.md", "SECURITY.md", "LICENSE", "package.json"]) {
+    await fs.cp(path.join(root, name), path.join(mac, name), { recursive: true });
+  }
+  await fs.mkdir(path.join(mac, "assets"), { recursive: true });
+  await fs.copyFile(path.join(root, "assets/AppIcon.icns"), path.join(mac, "assets/AppIcon.icns"));
+  await fs.mkdir(path.join(mac, "scripts"));
+  for (const name of ["install.mjs", "installed-cli.mjs"]) await fs.copyFile(path.join(root, "scripts", name), path.join(mac, "scripts", name));
+  for (const name of ["安装皮肤.command", "启动豆包工作.command"]) await fs.chmod(path.join(mac, name), 0o755);
+  await fs.writeFile(path.join(mac, "先看这里.txt"), "首次使用：双击 安装皮肤.command，自动准备运行环境。\n装好后：从启动台打开「豆包换肤」App（推荐，可拖到 Dock，无需确认），或在桌面“豆包换肤”里双击启动入口。\n无需安装 Node.js、Git、Homebrew 或开发工具；首次安装需要联网。\n需要重启时请保存工作并等待当前 Agent 任务结束。\n更新：下载新版，重新双击安装文件；已有皮肤和偏好保留。\n");
   const macZip = path.join(dist, `DoubaoWorkSkin-${pkg.version}-macos-scripts.zip`);
   await fs.rm(macZip, { force: true });
-  zipDirectory(macPayload, macZip);
+  zipDirectory(mac, macZip);
   const macHash = createHash("sha256").update(await fs.readFile(macZip)).digest("hex");
   await fs.writeFile(`${macZip}.sha256`, `${macHash}  ${path.basename(macZip)}\n`);
   console.log(`已生成：${macZip}`);
 
-  // Windows 发布包
-  const winPayload = path.join(temp, "豆包工作皮肤-windows");
-  await buildPayload(winPayload, "windows");
+  // ─── Windows 包 ───
+  const win = path.join(temp, "win-payload", "豆包换肤");
+  await fs.mkdir(win, { recursive: true });
+  for (const name of ["安装皮肤.cmd", "安装皮肤.ps1", "skin.mjs", "src", "skins", "README.md", "AGENTS.md", "CONTRIBUTING.md", "RELEASING.md", "SECURITY.md", "LICENSE", "package.json"]) {
+    await fs.cp(path.join(root, name), path.join(win, name), { recursive: true });
+  }
+  await fs.mkdir(path.join(win, "assets"), { recursive: true });
+  await fs.copyFile(path.join(root, "assets/AppIcon.ico"), path.join(win, "assets/AppIcon.ico"));
+  await fs.mkdir(path.join(win, "scripts"));
+  for (const name of ["install.mjs", "installed-cli.mjs"]) await fs.copyFile(path.join(root, "scripts", name), path.join(win, "scripts", name));
+  await fs.writeFile(path.join(win, "先看这里.txt"), "首次使用：解压后双击 安装皮肤.cmd，按提示操作（会自动准备运行环境，需要联网）。\n装好后：从桌面双击「豆包工作皮肤」启动。\n需要重启时请保存工作并等待当前 Agent 任务结束，再从桌面入口确认一次。\n更新：下载新版重新解压并双击 安装皮肤.cmd；已有皮肤和偏好保留。\n支持范围：Windows 10/11 桌面版（x64），Microsoft Store 版与 ARM64 未实测。\n");
   const winZip = path.join(dist, `DoubaoWorkSkin-${pkg.version}-windows-scripts.zip`);
   await fs.rm(winZip, { force: true });
-  zipDirectory(winPayload, winZip);
+  zipDirectory(win, winZip);
   const winHash = createHash("sha256").update(await fs.readFile(winZip)).digest("hex");
   await fs.writeFile(`${winZip}.sha256`, `${winHash}  ${path.basename(winZip)}\n`);
   console.log(`已生成：${winZip}`);
 
-  // Skill 包（使用 macOS payload，因为 skill 主要在 macOS 上使用）
+  // ─── Skill 包：跨平台完整 project（两套入口 + icns/ico） ───
   const skill = path.join(temp, "doubao-work-skin");
   await fs.mkdir(path.join(skill, "assets"), { recursive: true });
   await fs.copyFile(path.join(root, "skills/doubao-work-skin/SKILL.md"), path.join(skill, "SKILL.md"));
-  await fs.cp(macPayload, path.join(skill, "assets/project"), { recursive: true });
+  const skillProject = path.join(skill, "assets/project");
+  await fs.mkdir(skillProject, { recursive: true });
+  for (const name of ["安装皮肤.command", "安装皮肤.cmd", "安装皮肤.ps1", "启动豆包工作.command", "skin.mjs", "src", "skins", "README.md", "AGENTS.md", "CONTRIBUTING.md", "RELEASING.md", "SECURITY.md", "LICENSE", "package.json"]) {
+    await fs.cp(path.join(root, name), path.join(skillProject, name), { recursive: true });
+  }
+  await fs.mkdir(path.join(skillProject, "assets"), { recursive: true });
+  if (await fs.access(path.join(root, "assets/AppIcon.icns")).then(() => true, () => false)) {
+    await fs.copyFile(path.join(root, "assets/AppIcon.icns"), path.join(skillProject, "assets/AppIcon.icns"));
+  }
+  if (await fs.access(path.join(root, "assets/AppIcon.ico")).then(() => true, () => false)) {
+    await fs.copyFile(path.join(root, "assets/AppIcon.ico"), path.join(skillProject, "assets/AppIcon.ico"));
+  }
+  await fs.mkdir(path.join(skillProject, "scripts"), { recursive: true });
+  for (const name of ["install.mjs", "installed-cli.mjs"]) await fs.copyFile(path.join(root, "scripts", name), path.join(skillProject, "scripts", name));
   const skillZip = path.join(dist, `doubao-work-skin-${pkg.version}-skill.zip`);
   await fs.rm(skillZip, { force: true });
   zipDirectory(skill, skillZip);
   const skillHash = createHash("sha256").update(await fs.readFile(skillZip)).digest("hex");
   await fs.writeFile(`${skillZip}.sha256`, `${skillHash}  ${path.basename(skillZip)}\n`);
   console.log(`Skill 包：${skillZip}`);
-} finally {
-  await fs.rm(temp, { recursive: true, force: true });
-}
+} finally { await fs.rm(temp, { recursive: true, force: true }); }
