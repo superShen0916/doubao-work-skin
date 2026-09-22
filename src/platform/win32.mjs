@@ -130,7 +130,7 @@ async function discoverFromRunningProcess() {
     if (!main) return null;
     // 根据路径判断安装类型：WindowsApps 目录下的是 Store 版
     const isStore = /[\\/]WindowsApps[\\/]/i.test(main.ExecutablePath);
-    return {
+  return {
       type: isStore ? "store" : "desktop",
       mainBinary: main.ExecutablePath,
       helperBinary: path.join(path.dirname(main.ExecutablePath), "DoubaoWork Browser.exe"),
@@ -160,7 +160,7 @@ async function discoverFromStorePackage() {
     `;
     const result = parsePowerShellJson(await runPowerShell(script));
     if (!result?.Executable) return null;
-    return {
+  return {
       type: "store",
       mainBinary: result.Executable,
       helperBinary: path.join(path.dirname(result.Executable), "DoubaoWork Browser.exe"),
@@ -178,7 +178,7 @@ async function discoverFromDesktopPaths() {
   for (const candidate of DESKTOP_CANDIDATE_PATHS) {
     try {
       await fs.access(candidate);
-      return {
+    return {
         type: "desktop",
         mainBinary: candidate,
         helperBinary: path.join(path.dirname(candidate), "DoubaoWork Browser.exe"),
@@ -321,9 +321,9 @@ export async function inspectProcess(pid) {
     `;
     const result = parsePowerShellJson(await runPowerShell(script));
     // Windows 上获取进程 cwd 需要 NtQueryInformationProcess，较复杂，返回 null
-    return { command: result?.Command || "", cwd: null };
+  return { command: result?.Command || "", cwd: null };
   } catch {
-    return { command: "", cwd: null };
+  return { command: "", cwd: null };
   }
 }
 
@@ -380,23 +380,24 @@ export function generateCliEntry(dataRoot, nodePath, bridgePath) {
 }
 
 export function silentLauncherScript(command, dataRoot) {
-  const cli = String(command).replace(/'/g, "''");
-  // M11：把 dataRoot 插值进日志路径与互斥锁名，避免多份安装共用同一日志/锁。
-  // 日志默认写到 <dataRoot>\launcher.log；mutex 名按 dataRoot 派生（非法字符替换为下划线）。
-  const logDir = String(dataRoot || "").replace(/'/g, "''");
-  const mutexBase = `DoubaoWorkSkin.Launcher.${String(dataRoot || "default").replace(/[^a-zA-Z0-9]/g, "_")}`;
-  return `# 豆包工作皮肤静默启动器；由桌面快捷方式以 -WindowStyle Hidden 调用。\r\n$ErrorActionPreference = 'Stop'\r\n$cli = '${cli}'\r\n$log = if ($env:DWS_LAUNCHER_LOG) { $env:DWS_LAUNCHER_LOG } else { Join-Path '${logDir}' 'launcher.log' }\r\n$mutexName = if ($env:DWS_LAUNCHER_MUTEX) { $env:DWS_LAUNCHER_MUTEX } else { 'Local\\${mutexBase}' }\r\nfunction Write-Log($msg) {\r\n  $ts = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'\r\n  Add-Content -Path $log -Value ($ts + ' ' + $msg) -Encoding UTF8\r\n}\r\n$mutex = New-Object System.Threading.Mutex($false, $mutexName)\r\n$acquired = $false\r\ntry {\r\n  try { $acquired = $mutex.WaitOne(0) } catch [System.Threading.AbandonedMutexException] { $acquired = $true }\r\n  if (-not $acquired) { Write-Log '已有启动器在运行，静默退出'; exit 0 }\r\n  Write-Log 'start'\r\n  \u0026 $cli start \u003e\u003e $log 2\u003e\u00261\r\n  $code = $LASTEXITCODE\r\n  Write-Log (\"start exit=\" + $code)\r\n  if ($code -eq 2) {\r\n    Write-Log '需要重启，自动 start --force'\r\n    \u0026 $cli start --force \u003e\u003e $log 2\u003e\u00261\r\n    $code = $LASTEXITCODE\r\n    Write-Log (\"force exit=\" + $code)\r\n  }\r\n  if ($code -ne 0) {\r\n    Write-Log (\"失败 code=\" + $code)\r\n    if (-not $env:DWS_LAUNCHER_NO_UI) {\r\n      Add-Type -AssemblyName System.Windows.Forms\r\n      $msg = '豆包工作皮肤启动失败（错误码 ' + $code + '）。' + [Environment]::NewLine + '日志：' + $log\r\n      [System.Windows.Forms.MessageBox]::Show($msg, '豆包工作皮肤', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null\r\n    }\r\n  }\r\n  exit $code\r\n} catch {\r\n  Write-Log (\"启动器异常：\" + $_.Exception.Message)\r\n  if (-not $env:DWS_LAUNCHER_NO_UI) {\r\n    Add-Type -AssemblyName System.Windows.Forms\r\n    [System.Windows.Forms.MessageBox]::Show(('豆包工作皮肤启动失败。' + [Environment]::NewLine + '日志：' + $log), '豆包工作皮肤', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null\r\n  }\r\n  exit 1\r\n} finally {\r\n  if ($acquired) { try { $mutex.ReleaseMutex() } catch {} }\r\n  $mutex.Dispose()\r\n}\r\n`;
+  const root = String(dataRoot).replace(/'/g, "''");
+  const mutexBase = `DoubaoWorkSkin.Launcher.${String(dataRoot).replace(/[^a-zA-Z0-9]/g, "_")}`;
+  return `# 豆包工作皮肤无窗口启动逻辑；由 WScript 托管。\r\n$ErrorActionPreference = 'Stop'\r\n[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)\r\n$OutputEncoding = [Console]::OutputEncoding\r\n$dataRoot = '${root}'\r\n$node = Join-Path $dataRoot 'engine\\runtime\\node.exe'\r\n$bridge = Join-Path $dataRoot 'engine\\scripts\\installed-cli.mjs'\r\n$log = if ($env:DWS_LAUNCHER_LOG) { $env:DWS_LAUNCHER_LOG } else { Join-Path $dataRoot 'launcher.log' }\r\n$mutexName = if ($env:DWS_LAUNCHER_MUTEX) { $env:DWS_LAUNCHER_MUTEX } else { 'Local\\${mutexBase}' }\r\n$env:DWS_STATE_ROOT = $dataRoot\r\nfunction Write-Log($msg) {\r\n  $ts = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'\r\n  Add-Content -LiteralPath $log -Value ($ts + ' ' + $msg) -Encoding UTF8\r\n}\r\nfunction Invoke-Skin([string[]]$SkinArgs) {\r\n  $oldPreference = $ErrorActionPreference\r\n  $ErrorActionPreference = 'Continue'\r\n  try {\r\n    & $node $bridge @SkinArgs 2>&1 | ForEach-Object { Write-Log ([string]$_) }\r\n    return $LASTEXITCODE\r\n  } finally { $ErrorActionPreference = $oldPreference }\r\n}\r\n$mutex = New-Object System.Threading.Mutex($false, $mutexName)\r\n$acquired = $false\r\ntry {\r\n  try { $acquired = $mutex.WaitOne(0) } catch [System.Threading.AbandonedMutexException] { $acquired = $true }\r\n  if (-not $acquired) { Write-Log '已有启动器在运行，静默退出'; exit 0 }\r\n  Write-Log 'start'\r\n  $code = Invoke-Skin @('start')\r\n  Write-Log (\"start exit=\" + $code)\r\n  if ($code -eq 2) {\r\n    Write-Log '需要重启，自动 start --force'\r\n    $code = Invoke-Skin @('start', '--force')\r\n    Write-Log (\"force exit=\" + $code)\r\n  }\r\n  if ($code -ne 0) {\r\n    Write-Log (\"失败 code=\" + $code)\r\n    if (-not $env:DWS_LAUNCHER_NO_UI) {\r\n      Add-Type -AssemblyName System.Windows.Forms\r\n      $msg = '豆包工作皮肤启动失败（错误码 ' + $code + '）。' + [Environment]::NewLine + '日志：' + $log\r\n      [System.Windows.Forms.MessageBox]::Show($msg, '豆包工作皮肤', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null\r\n    }\r\n  }\r\n  exit $code\r\n} catch {\r\n  Write-Log (\"启动器异常：\" + $_.Exception.Message)\r\n  if (-not $env:DWS_LAUNCHER_NO_UI) {\r\n    Add-Type -AssemblyName System.Windows.Forms\r\n    [System.Windows.Forms.MessageBox]::Show(('豆包工作皮肤启动失败。' + [Environment]::NewLine + '日志：' + $log), '豆包工作皮肤', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null\r\n  }\r\n  exit 1\r\n} finally {\r\n  if ($acquired) { try { $mutex.ReleaseMutex() } catch {} }\r\n  $mutex.Dispose()\r\n}\r\n`;
 }
 
+export function silentLauncherHostScript() {
+  return `Option Explicit\r\nDim shell, ps1, powershell, command\r\nIf WScript.Arguments.Count <> 1 Then WScript.Quit 64\r\nSet shell = CreateObject(\"WScript.Shell\")\r\nps1 = WScript.Arguments(0)\r\npowershell = shell.ExpandEnvironmentStrings(\"%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\")\r\ncommand = Chr(34) & powershell & Chr(34) & \" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \" & Chr(34) & ps1 & Chr(34)\r\nshell.Run command, 0, False\r\n`;
+}
 export function launcherScripts(command, dataRoot) {
   const cmd = `call "${command}"`;
   const header = "@echo off\r\nchcp 65001 >nul\r\nsetlocal\r\nset NODE_OPTIONS=\r\nset NODE_PATH=\r\n";
   const root = dataRoot || paths().dataRoot;
   // 启动豆包工作.cmd：Agent/CI 与手动控制台入口。start 返回 2 时自动 start --force 一次。
-  // 桌面 .lnk 不再指向此 cmd（会有黑框），而是指向下方静默 ps1。
-    return {
+  // 桌面 .lnk 不指向 cmd/PowerShell（都会在部分系统显示终端），而是由 WScript 无窗口托管。
+  return {
     "启动豆包工作.cmd": `${header}${cmd} start\r\nif %errorlevel% equ 2 (\r\n  echo 需要重启才能换肤，自动重启中...\r\n  ${cmd} start --force\r\n)\r\nexit /b %errorlevel%\r\n`,
     "启动豆包工作皮肤.ps1": silentLauncherScript(command, root),
+    "launcher.vbs": silentLauncherHostScript(),
     "恢复官方外观.cmd": `${header}${cmd} disable\r\n`,
     "复制换肤提示词.cmd": `${header}for /f "delims=" %%i in ('${cmd} prompt') do set "PROMPT_TEXT=%%i"\r\necho %PROMPT_TEXT% | clip\r\necho 已复制，粘贴到豆包工作对话即可。\r\n`,
   };
@@ -406,7 +407,7 @@ export function launcherScripts(command, dataRoot) {
 
 export async function createDesktopShortcut(targetPath, linkName, desktopDirOverride = null, options = {}) {
   const desktopDir = desktopDirOverride || paths().desktopDir;
-  const { iconPath = null, description = "", workingDir = null, legacyFolderPath = null, shortcutArguments = "", legacyCmdPath = null } = options;
+  const { iconPath = null, description = "", workingDir = null, legacyFolderPath = null, shortcutArguments = "", legacyCmdPath = null, legacyShortcuts = [] } = options;
   await fs.mkdir(desktopDir, { recursive: true });
   const linkPath = path.join(desktopDir, `${linkName}.lnk`);
   // 存在性检查：
@@ -439,7 +440,10 @@ export async function createDesktopShortcut(targetPath, linkName, desktopDirOver
         : existingArguments === String(shortcutArguments || "").trim());
     const isOurs = isCurrentShortcut
       || (legacyFolderPath && samePath(existingTarget, legacyFolderPath))
-      || (legacyCmdPath && samePath(existingTarget, legacyCmdPath));
+      || (legacyCmdPath && samePath(existingTarget, legacyCmdPath))
+      || legacyShortcuts.some((candidate) => candidate?.target && candidate?.file
+        && samePath(existingTarget, candidate.target)
+        && existingFile && samePath(existingFile, candidate.file));
     if (!isOurs) {
       throw new Error("桌面已有同名快捷方式指向其他目标，未覆盖");
     }

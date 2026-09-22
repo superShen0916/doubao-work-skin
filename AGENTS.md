@@ -34,7 +34,7 @@
 - **安装入口**：解压后双击 **`安装皮肤.cmd`**（它调用同目录 `安装皮肤.ps1` 下载并校验专用 Node.js）。不要让用户手动执行 PowerShell 脚本；脚本本身会校验 SHA-256。
 - **固定命令入口与数据目录**：程序与个人皮肤位于 `%LOCALAPPDATA%\DoubaoWorkSkin\`（即 `dataRoot`）。Agent 操作优先使用该目录下的固定入口（`skin.cmd` / `skin`），与 macOS 的 `$HOME/Library/Application Support/DoubaoWorkSkin/skin` 对等。个人皮肤在 `%LOCALAPPDATA%\DoubaoWorkSkin\skins\`，升级不覆盖。
 - **不要 `--force`**：与 macOS 一样，当前任务里的 Agent 不应执行 `start --force`、退出应用或终止进程，否则可能中断自己和用户任务。需要重启时，把步骤交给用户：保存工作、等待当前任务结束，再由用户双击桌面入口。
-- **桌面入口**：推荐用户双击桌面 **「豆包工作皮肤」`.lnk`**。快捷方式以隐藏窗口方式运行 PowerShell 启动器：先执行一次普通 `start`，仅当返回“需要重启”时自动执行一次 `start --force`；全程无黑框、无 `y` 确认，并用命名 Mutex 防止重复双击。控制台排查才使用 `启动豆包工作.cmd`，它同样不询问 `y`。**恢复官方外观**使用 `启动入口\恢复官方外观.cmd`，等价于固定入口的 `skin disable`。
+- **桌面入口**：推荐用户双击桌面 **「豆包工作皮肤」`.lnk`**。快捷方式由系统 `wscript.exe` 无窗口托管 PowerShell 启动器：先执行一次普通 `start`，仅当返回“需要重启”时自动执行一次 `start --force`；全程无黑框、无 `y` 确认，并用命名 Mutex 防止重复双击。控制台排查才使用 `启动豆包工作.cmd`，它同样不询问 `y`。**恢复官方外观**使用 `启动入口\恢复官方外观.cmd`，等价于固定入口的 `skin disable`。
 - **启动定位**：Windows 版定位 `%LOCALAPPDATA%\DoubaoWork\Application\app\DoubaoWork.exe` 等候选路径；Store 版有激活分支但未真机验收。报告问题时附带 `%LOCALAPPDATA%\DoubaoWorkSkin\launcher.log` 与 `status` 输出，不要读取对话内容或 Cookie。
 - **升级**：安装器在替换 `engine\` 前会检查是否有旧换肤 `node.exe` 占用，最多等 5 秒；仍占用则报错并保留旧版本备份，不要让用户手删 `engine\` 目录。
 

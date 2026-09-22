@@ -60,66 +60,42 @@ test("generateCliEntry：生成合法 .cmd 入口，含 chcp 和安全 set", () 
   assert.ok(entry.includes("set NODE_PATH="));
 });
 
-test("launcherScripts：生成四个启动脚本（含静默 ps1），文件名和内容正确", () => {
+test("launcherScripts：生成五个启动脚本（含 VBS+PS1 静默链），文件名和内容正确", () => {
   const command = "C:\\Users\\Test\\skin.cmd";
-  const scripts = win32.launcherScripts(command);
-  const names = Object.keys(scripts);
-  assert.deepEqual(names, ["启动豆包工作.cmd", "启动豆包工作皮肤.ps1", "恢复官方外观.cmd", "复制换肤提示词.cmd"]);
-
-  // 所有脚本都有 chcp 和 setlocal
+  const root = "C:\\Users\\Test\\DoubaoWorkSkin";
+  const scripts = win32.launcherScripts(command, root);
+  assert.deepEqual(Object.keys(scripts), ["启动豆包工作.cmd", "启动豆包工作皮肤.ps1", "launcher.vbs", "恢复官方外观.cmd", "复制换肤提示词.cmd"]);
   for (const [name, text] of Object.entries(scripts)) {
     if (!name.endsWith(".cmd")) continue;
     assert.ok(text.includes("chcp 65001"), `${text} 应含 chcp`);
     assert.ok(text.includes("setlocal"), `${text} 应含 setlocal`);
     assert.ok(text.includes(`call "${command}"`), `${text} 应调用 command`);
   }
-
-  // 静默 ps1：start exit 2 才 force，写日志，用命名 Mutex 防并发
   const ps1 = scripts["启动豆包工作皮肤.ps1"];
-  assert.ok(ps1.includes("start --force"));
+  assert.ok(ps1.includes("@('start', '--force')"));
   assert.ok(ps1.includes("launcher.log"));
   assert.ok(ps1.includes("System.Threading.Mutex"));
   assert.ok(ps1.includes("WaitOne(0)"));
-  assert.ok(ps1.includes("$cli = 'C:\\Users\\Test\\skin.cmd'"));
-
-  // 启动脚本：start 失败时 exit 2，自动 --force
-  const launcher = scripts["启动豆包工作.cmd"];
-  assert.ok(launcher.includes("start"));
-  assert.ok(launcher.includes("--force"));
-  assert.ok(launcher.includes("start --force"));
-
-  // 恢复脚本：调用 disable
+  assert.ok(ps1.includes("engine\\runtime\\node.exe"));
+  assert.ok(ps1.includes("engine\\scripts\\installed-cli.mjs"));
+  assert.ok(ps1.includes("$ErrorActionPreference = 'Continue'"));
+  const vbs = scripts["launcher.vbs"];
+  assert.ok(vbs.includes("WScript.Arguments(0)"));
+  assert.ok(vbs.includes("shell.Run command, 0, False"));
+  assert.ok(scripts["启动豆包工作.cmd"].includes("start --force"));
   assert.ok(scripts["恢复官方外观.cmd"].includes("disable"));
-
-  // 复制提示词脚本：调用 prompt 并管道到 clip
-  const copy = scripts["复制换肤提示词.cmd"];
-  assert.ok(copy.includes("prompt"));
-  assert.ok(copy.includes("clip"));
+  assert.ok(scripts["复制换肤提示词.cmd"].includes("prompt"));
+  assert.ok(scripts["复制换肤提示词.cmd"].includes("clip"));
 });
 
-test("silentLauncherScript：exit 0 不 force，exit 2 只 force 一次", () => {
-  if (process.platform !== "win32") return;
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dws-silent-launcher-"));
-  try {
-    const calls = path.join(root, "calls.txt");
-    const fake = path.join(root, "skin.cmd");
-    const script = path.join(root, "启动 皮肤.ps1");
-    const log = path.join(root, "launcher.log");
-    const writeFake = (firstCode) => fs.writeFileSync(fake,
-      `@echo off\r\necho %* >> "${calls}"\r\nif "%2"=="--force" exit /b 0\r\nexit /b ${firstCode}\r\n`);
-    fs.writeFileSync(script, "\uFEFF" + win32.silentLauncherScript(fake), "utf8");
-    const run = (mutex) => execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script], {
-      env: { ...process.env, DWS_LAUNCHER_LOG: log, DWS_LAUNCHER_MUTEX: mutex, DWS_LAUNCHER_NO_UI: "1" },
-      stdio: "pipe",
-    });
-    writeFake(0);
-    run(`Local\\DwsTest.${process.pid}.ok`);
-    assert.equal(fs.readFileSync(calls, "utf8").replace(/\r/g, "").trim(), "start");
-    fs.rmSync(calls, { force: true });
-    writeFake(2);
-    run(`Local\\DwsTest.${process.pid}.retry`);
-    assert.deepEqual(fs.readFileSync(calls, "utf8").replace(/\r/g, "").trim().split("\n").map((line) => line.trimEnd()), ["start", "start --force"]);
-  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+test("silentLauncherScript：生成内置 Node 直连逻辑，具体退出码行为由专项测试覆盖", () => {
+  const root = "C:\\Users\\tester\\AppData\\Local\\DoubaoWorkSkin";
+  const ps1 = win32.silentLauncherScript("C:\\ignored\\skin.cmd", root);
+  assert.ok(ps1.includes("engine\\runtime\\node.exe"));
+  assert.ok(ps1.includes("engine\\scripts\\installed-cli.mjs"));
+  assert.ok(ps1.includes("@('start', '--force')"));
+  assert.ok(ps1.includes("$ErrorActionPreference = 'Continue'"));
+  assert.doesNotMatch(ps1, /skin\.cmd/);
 });
 
 test("paths：返回 dataRoot、defaultSkinsDir、desktopDir", () => {
@@ -302,41 +278,33 @@ test("paths：无 DWS_DESKTOP_DIR 时 desktopDir 走 Known Folder 且结果缓�
 
 // ─── M11：ps1 日志/锁路径按 dataRoot 插值 ────────────────
 
-test("silentLauncherScript：dataRoot 插值进日志路径与 mutex 名，不再硬编码 LOCALAPPDATA", () => {
+test("silentLauncherScript：dataRoot 插值进日志路径、内置 Node 路径与 mutex 名", () => {
   const root = "C:\\Users\\tester\\AppData\\Local\\DoubaoWorkSkin";
-  const ps1 = win32.silentLauncherScript("C:\\x\\skin.cmd", root);
-  // 日志默认写到 <dataRoot>\launcher.log
-  assert.ok(ps1.includes("Join-Path 'C:\\Users\\tester\\AppData\\Local\\DoubaoWorkSkin' 'launcher.log'"),
-    "日志路径应插值 dataRoot");
-  // mutex 名按 dataRoot 派生（非法字符替换为下划线）
-  assert.ok(ps1.includes("Local\\DoubaoWorkSkin.Launcher.C__Users_tester_AppData_Local_DoubaoWorkSkin"),
-    "mutex 名应按 dataRoot 派生");
-  // 不再硬编码旧的 LOCALAPPDATA 拼接
-  assert.ok(!ps1.includes("Join-Path $env:LOCALAPPDATA 'DoubaoWorkSkin"),
-    "不应再硬编码 LOCALAPPDATA 拼接日志路径");
+  const ps1 = win32.silentLauncherScript("C:\\ignored\\skin.cmd", root);
+  assert.ok(ps1.includes("$dataRoot = 'C:\\Users\\tester\\AppData\\Local\\DoubaoWorkSkin'"));
+  assert.ok(ps1.includes("Join-Path $dataRoot 'launcher.log'"));
+  assert.ok(ps1.includes("Join-Path $dataRoot 'engine\\runtime\\node.exe'"));
+  assert.ok(ps1.includes("Local\\DoubaoWorkSkin.Launcher.C__Users_tester_AppData_Local_DoubaoWorkSkin"));
 });
 
-test("launcherScripts：传入 dataRoot 时 ps1 与 .cmd 均正确生成（自动 force 无 y/n）", () => {
+test("launcherScripts：传入 dataRoot 时生成 VBS+PS1 链和自动 force 的控制台入口", () => {
   const root = "D:\\custom\\DoubaoWorkSkin";
   const scripts = win32.launcherScripts("C:\\x\\skin.cmd", root);
   const ps1 = scripts["启动豆包工作皮肤.ps1"];
-  assert.ok(ps1.includes("Join-Path 'D:\\custom\\DoubaoWorkSkin' 'launcher.log'"));
-  // 用户入口：exit 2 自动 start --force（双击即授权，无 y/n）
+  assert.ok(ps1.includes("$dataRoot = 'D:\\custom\\DoubaoWorkSkin'"));
+  assert.ok(scripts["launcher.vbs"].includes("WScript.Arguments(0)"));
   const cmd = scripts["启动豆包工作.cmd"];
-  assert.ok(!cmd.includes("choice /c YN"), "用户入口不应阻塞等待 y/n");
+  assert.ok(!cmd.includes("choice /c YN"));
   assert.ok(cmd.includes("start --force"));
 });
 
-test("launcherScripts：不传 dataRoot 时 ps1 \$cli 仍为绝对 dataRoot\\skin.cmd，不指向启动入口", () => {
+test("launcherScripts：不传 dataRoot 时使用平台 dataRoot，不依赖启动入口内的 skin.cmd", () => {
   if (process.platform !== "win32") return;
-  const dataRoot = "C:\\Users\\tester\\AppData\\Local\\DoubaoWorkSkin";
-  const command = dataRoot + "\\skin.cmd";
+  const command = "C:\\Users\\tester\\AppData\\Local\\DoubaoWorkSkin\\skin.cmd";
   const scripts = win32.launcherScripts(command);
   const ps1 = scripts["启动豆包工作皮肤.ps1"];
-  const cliLine = ps1.split("\r\n").find(l => l.startsWith("$cli"));
-  assert.ok(cliLine.includes(command), "ps1 $cli 应指向绝对 dataRoot\\skin.cmd");
-  assert.ok(!cliLine.includes("启动入口"), "ps1 $cli 不应指向启动入口子目录");
-  // .cmd 入口也用绝对路径
-  const cmd = scripts["启动豆包工作.cmd"];
-  assert.ok(cmd.includes(command), ".cmd 应调用绝对 CLI 路径");
+  assert.ok(ps1.includes("engine\\runtime\\node.exe"));
+  assert.ok(ps1.includes("engine\\scripts\\installed-cli.mjs"));
+  assert.doesNotMatch(ps1, /启动入口\\skin\.cmd/);
+  assert.ok(scripts["启动豆包工作.cmd"].includes(command));
 });

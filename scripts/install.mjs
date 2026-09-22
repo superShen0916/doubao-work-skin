@@ -218,12 +218,16 @@ export function installTargets(platform, { shortcuts, engine, applicationsDir })
       desktop: {
         kind: "lnk",
         name: "豆包工作皮肤",
-        target: powershellExe(),
-        shortcutArguments: `-WindowStyle Hidden -NoProfile -ExecutionPolicy Bypass -File "${path.join(shortcuts, "启动豆包工作皮肤.ps1")}"`,
+        target: path.join(process.env.SystemRoot || process.env.WINDIR || "C:\\Windows", "System32", "wscript.exe"),
+        shortcutArguments: `"${path.join(shortcuts, "launcher.vbs")}" "${path.join(shortcuts, "启动豆包工作皮肤.ps1")}"`,
         iconPath: path.join(engine, "assets", "AppIcon.ico"),
         workingDir: shortcuts,
         legacyFolderPath: shortcuts,
         legacyCmdPath: path.join(shortcuts, "启动豆包工作.cmd"),
+        legacyShortcuts: [{
+          target: powershellExe(),
+          file: path.join(shortcuts, "启动豆包工作皮肤.ps1"),
+        }],
       },
       launcherApp: null,
       iconAsset: "assets/AppIcon.ico",
@@ -332,6 +336,7 @@ export async function install({
             workingDir: plan.desktop.workingDir,
             legacyFolderPath: plan.desktop.legacyFolderPath,
             legacyCmdPath: plan.desktop.legacyCmdPath,
+            legacyShortcuts: plan.desktop.legacyShortcuts,
             shortcutArguments: plan.desktop.shortcutArguments,
           });
         } catch (error) { console.warn(`桌面入口未创建：${error.message}\n请手动打开：${shortcuts}`); }

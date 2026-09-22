@@ -155,14 +155,16 @@ test("用户入口：exit 2 自动重试一次 start --force；mac 非交互仍�
 });
 
 
-test("installTargets：win32 计划选 powershell+ps1 / 豆包工作皮肤.lnk / AppIcon.ico，不建 app", () => {
+test("installTargets：win32 计划选 wscript+VBS / 豆包工作皮肤.lnk / AppIcon.ico，不建 app", () => {
   const plan = installTargets("win32", { shortcuts: "C:\\dws\\启动入口", engine: "C:\\dws\\engine", applicationsDir: "C:\\Users\\u\\Applications" });
   assert.equal(plan.launcherSource, "platform");
   assert.equal(plan.desktop.kind, "lnk");
   assert.equal(plan.desktop.name, "豆包工作皮肤");
-  assert.match(plan.desktop.target, /powershell\.exe$/);
-  assert.match(plan.desktop.shortcutArguments, /-WindowStyle Hidden/);
+  assert.match(plan.desktop.target, /wscript\.exe$/i);
+  assert.match(plan.desktop.shortcutArguments, /launcher\.vbs/);
   assert.match(plan.desktop.shortcutArguments, /启动豆包工作皮肤\.ps1/);
+  assert.ok(plan.desktop.legacyShortcuts.some((entry) => /powershell\.exe$/i.test(entry.target)
+    && entry.file.endsWith("启动豆包工作皮肤.ps1")));
   assert.match(plan.desktop.legacyCmdPath, /启动豆包工作\.cmd$/);
   assert.match(plan.desktop.iconPath, /AppIcon\.ico$/);
   assert.equal(plan.launcherApp, null);

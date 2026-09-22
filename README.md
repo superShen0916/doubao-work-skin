@@ -62,7 +62,7 @@
 - 换肤/切换/验证仍可在对话中用自然语言完成（”换成海风微语”、”恢复官方外观”）。
 - **恢复官方外观**：双击桌面「恢复官方外观.cmd」，或运行固定入口的 `skin disable`。
 - 个人皮肤与程序数据位于 `%LOCALAPPDATA%\DoubaoWorkSkin\`（日志在其下 `launcher.log`），升级时保留，不会被覆盖。
-- 桌面 `.lnk` 指向静默 PowerShell 启动器；需要在控制台手动排查时，可运行 `启动豆包工作.cmd`（需要重启时会用 `choice` 询问一次）。
+- 桌面 `.lnk` 由系统 `wscript.exe` 无窗口托管，再调用 PowerShell 与内置 Node CLI；无需输入 `y`，也不会显示终端窗口。仅在控制台排查时运行 `启动豆包工作.cmd`。
 
 ### 可选：Skill
 
