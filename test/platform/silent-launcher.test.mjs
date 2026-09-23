@@ -73,6 +73,19 @@ function waitForFile(file, timeoutMs = 10_000) {
   throw new Error(`等待文件超时: ${file}`);
 }
 
+function waitForText(file, pattern, timeoutMs = 10_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (fs.existsSync(file) && pattern.test(fs.readFileSync(file, "utf8"))) return;
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+  }
+  throw new Error(`等待日志超时: ${file}`);
+}
+
+function removeFixture(root) {
+  fs.rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
+}
+
 test("桌面 ps1：只执行一次 start --force，并尝试激活窗口", () => {
   if (process.platform !== "win32") return;
   const fx = makeFixture(0);
@@ -120,7 +133,8 @@ test("VBS 正式入口由 wscript 托管并启动同目录 PS1", () => {
     execFileSync(WSCRIPT, [fx.vbsPath, fx.ps1Path], { env: fixtureEnv(fx), timeout: 5_000, windowsHide: true });
     waitForFile(fx.calls);
     assert.deepEqual(readCalls(fx), ["start --force"]);
-  } finally { fs.rmSync(fx.dataRoot, { recursive: true, force: true }); }
+    waitForText(path.join(fx.dataRoot, "launcher.log"), /已激活豆包工作 PID|未能自动激活豆包工作 PID/);
+  } finally { removeFixture(fx.dataRoot); }
 });
 
 test("命名互斥锁防止桌面入口重复执行", async () => {
