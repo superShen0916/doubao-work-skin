@@ -198,6 +198,26 @@ test("重启前必须等待 shim 和旧浏览器全部退出", async () => {
   assert.deepEqual(events, [[9, "SIGTERM"], [9, "wait"], [10, "wait"]]);
 });
 
+test("多个浏览器退出等待并行启动", async () => {
+  const started = [];
+  const resolvers = new Map();
+  const stopping = stopDoubaoWork({
+    pid: 9,
+    findBrowserPids: async () => [10, 11],
+    signal: () => {},
+    waitForExit: async (pid) => {
+      started.push(pid);
+      if (pid === 9) return true;
+      return new Promise((resolve) => resolvers.set(pid, resolve));
+    },
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(started, [9, 10, 11]);
+  resolvers.get(10)(true);
+  resolvers.get(11)(true);
+  await stopping;
+});
+
 test("浏览器仍在退出时中止重启，不强杀浏览器或忽略单例锁", async () => {
   const signals = [];
   await assert.rejects(stopDoubaoWork({

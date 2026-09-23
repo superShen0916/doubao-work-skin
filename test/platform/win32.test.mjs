@@ -17,6 +17,15 @@ import { execFileSync } from "node:child_process";
 // 直接导入 win32 实现，绕过 platform/index.mjs 的 process.platform 选择
 import * as win32 from "../../src/platform/win32.mjs";
 
+test("isProcessAlive：使用 Node 原生 signal 0，EPERM 视为存活", async () => {
+  const calls = [];
+  assert.equal(await win32.isProcessAlive(123, { killImpl(pid, signal) { calls.push([pid, signal]); } }), true);
+  assert.deepEqual(calls, [[123, 0]]);
+  assert.equal(await win32.isProcessAlive(124, { killImpl() { const error = new Error("denied"); error.code = "EPERM"; throw error; } }), true);
+  assert.equal(await win32.isProcessAlive(125, { killImpl() { const error = new Error("missing"); error.code = "ESRCH"; throw error; } }), false);
+  assert.equal(await win32.isProcessAlive(0, { killImpl() { throw new Error("must not run"); } }), false);
+});
+
 test("shellQuote：纯 ASCII 标识符不加引号", () => {
   assert.equal(win32.shellQuote("node"), "node");
   assert.equal(win32.shellQuote("C:/node/node.exe"), "C:/node/node.exe");
@@ -120,6 +129,49 @@ test("paths：DWS_STATE_ROOT 环境变量覆盖 dataRoot", () => {
 });
 
 const APP = "C:\\Users\\Test User\\AppData\\Local\\DoubaoWork\\Application\\app\\DoubaoWork.exe";
+
+const DESKTOP_INSTALL = {
+  type: "desktop",
+  mainBinary: APP,
+  helperBinary: path.join(path.dirname(APP), "DoubaoWork Browser.exe"),
+  version: null,
+};
+
+test("discoverAppInstall：运行中桌面版命中后跳过路径和 Store 探测", async () => {
+  let desktopCalls = 0;
+  let storeCalls = 0;
+  const actual = await win32.discoverAppInstall({
+    fromProcess: async () => DESKTOP_INSTALL,
+    fromDesktop: async () => { desktopCalls++; return null; },
+    fromStore: async () => { storeCalls++; return null; },
+  });
+  assert.equal(actual, DESKTOP_INSTALL);
+  assert.equal(desktopCalls, 0);
+  assert.equal(storeCalls, 0);
+});
+
+test("discoverAppInstall：静态桌面路径命中后跳过 Store 探测", async () => {
+  let storeCalls = 0;
+  const actual = await win32.discoverAppInstall({
+    fromProcess: async () => null,
+    fromDesktop: async () => DESKTOP_INSTALL,
+    fromStore: async () => { storeCalls++; return null; },
+  });
+  assert.equal(actual, DESKTOP_INSTALL);
+  assert.equal(storeCalls, 0);
+});
+
+test("discoverAppInstall：仅桌面版均未命中时探测 Store", async () => {
+  let storeCalls = 0;
+  const storeInstall = { type: "store", mainBinary: "C:\\Program Files\\WindowsApps\\DoubaoWork.exe" };
+  const actual = await win32.discoverAppInstall({
+    fromProcess: async () => null,
+    fromDesktop: async () => null,
+    fromStore: async () => { storeCalls++; return storeInstall; },
+  });
+  assert.equal(actual, storeInstall);
+  assert.equal(storeCalls, 1);
+});
 
 test("pickMainProcessRow：子进程与主进程同路径时选中无 --type= 的主进程", () => {
   const rows = [

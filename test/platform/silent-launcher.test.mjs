@@ -24,8 +24,10 @@ function makeFixture(exitCode) {
   fs.writeFileSync(path.join(scriptsDir, "installed-cli.mjs"), `
 import fs from "node:fs";
 fs.appendFileSync(process.env.DWS_TEST_CALLS, process.argv.slice(2).join(" ") + "\\n", "utf8");
-console.error("需要重启豆包工作；中文错误流不是 PowerShell 异常");
-process.exit(Number(process.env.DWS_TEST_EXIT || 0));
+console.error("中文错误流不是 PowerShell 异常");
+const code = Number(process.env.DWS_TEST_EXIT || 0);
+if (code === 0) fs.writeFileSync(new URL("../../state.json", import.meta.url), JSON.stringify({ doubaoWorkPid: process.pid }), "utf8");
+process.exit(code);
 `, "utf8");
   const scripts = win32.launcherScripts(path.join(dataRoot, "skin.cmd"), dataRoot);
   const ps1Path = path.join(entryDir, "启动豆包工作皮肤.ps1");
@@ -71,38 +73,38 @@ function waitForFile(file, timeoutMs = 10_000) {
   throw new Error(`等待文件超时: ${file}`);
 }
 
-test("无窗口 ps1：start exit 0 不 force，并记录 UTF-8 中文日志", () => {
+test("桌面 ps1：只执行一次 start --force，并尝试激活窗口", () => {
   if (process.platform !== "win32") return;
   const fx = makeFixture(0);
   try {
     assert.equal(runPs1(fx), 0);
-    assert.deepEqual(readCalls(fx), ["start"]);
+    assert.deepEqual(readCalls(fx), ["start --force"]);
     const log = fs.readFileSync(path.join(fx.dataRoot, "launcher.log"), "utf8");
     assert.match(log, /中文错误流不是 PowerShell 异常/);
+    assert.match(log, /force exit=0/);
+    assert.match(log, /已激活豆包工作 PID|未能自动激活豆包工作 PID/);
     assert.doesNotMatch(log, /启动器异常/);
-    assert.doesNotMatch(log, /force exit=/);
   } finally { fs.rmSync(fx.dataRoot, { recursive: true, force: true }); }
 });
 
-test("无窗口 ps1：stderr + exit 2 仍按退出码自动 start --force 一次", () => {
+test("桌面 ps1：force 返回 2 时不重复执行", () => {
   if (process.platform !== "win32") return;
   const fx = makeFixture(2);
   try {
     assert.equal(runPs1(fx), 2);
-    assert.deepEqual(readCalls(fx), ["start", "start --force"]);
+    assert.deepEqual(readCalls(fx), ["start --force"]);
     const log = fs.readFileSync(path.join(fx.dataRoot, "launcher.log"), "utf8");
-    assert.match(log, /start exit=2/);
     assert.match(log, /force exit=2/);
     assert.doesNotMatch(log, /启动器异常/);
   } finally { fs.rmSync(fx.dataRoot, { recursive: true, force: true }); }
 });
 
-test("无窗口 ps1：非约定失败码只记录失败，不 force", () => {
+test("桌面 ps1：其他失败码只执行一次 force 并记录失败", () => {
   if (process.platform !== "win32") return;
   const fx = makeFixture(7);
   try {
     assert.equal(runPs1(fx), 7);
-    assert.deepEqual(readCalls(fx), ["start"]);
+    assert.deepEqual(readCalls(fx), ["start --force"]);
     const log = fs.readFileSync(path.join(fx.dataRoot, "launcher.log"), "utf8");
     assert.match(log, /失败 code=7/);
   } finally { fs.rmSync(fx.dataRoot, { recursive: true, force: true }); }
@@ -117,7 +119,7 @@ test("VBS 正式入口由 wscript 托管并启动同目录 PS1", () => {
     assert.match(vbs, /WScript\.Arguments\(0\)/);
     execFileSync(WSCRIPT, [fx.vbsPath, fx.ps1Path], { env: fixtureEnv(fx), timeout: 5_000, windowsHide: true });
     waitForFile(fx.calls);
-    assert.deepEqual(readCalls(fx), ["start"]);
+    assert.deepEqual(readCalls(fx), ["start --force"]);
   } finally { fs.rmSync(fx.dataRoot, { recursive: true, force: true }); }
 });
 

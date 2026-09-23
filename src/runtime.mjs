@@ -460,10 +460,14 @@ export async function stopDoubaoWork({
     if (!await waitForExit(numericPid, { timeoutMs: 2_000 })) throw new Error(`无法停止豆包工作进程 ${numericPid}`);
   }
   // 主应用是 shim；它退出不代表持有 profile 单例锁的浏览器已经退出。
-  for (const browserPid of browserPids) {
-    if (!await waitForExit(browserPid, { timeoutMs: 10_000 })) {
-      throw new Error(`豆包工作浏览器 PID ${browserPid} 尚未退出；请完全退出应用后重试，避免新启动的 CDP 参数被旧实例忽略`);
-    }
+  // 多个浏览器进程彼此独立，并行等待，避免按 PID 串行累计超时。
+  const browserResults = await Promise.all(browserPids.map(async (browserPid) => ({
+    browserPid,
+    exited: await waitForExit(browserPid, { timeoutMs: 10_000 }),
+  })));
+  const pending = browserResults.find(({ exited }) => !exited);
+  if (pending) {
+    throw new Error(`豆包工作浏览器 PID ${pending.browserPid} 尚未退出；请完全退出应用后重试，避免新启动的 CDP 参数被旧实例忽略`);
   }
 }
 

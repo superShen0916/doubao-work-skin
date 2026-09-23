@@ -294,7 +294,10 @@ export function createCli(overrides = {}) {
     let selectedPort = port;
     let cdpReady = false;
     if (appPid) {
-      const discoveredPort = await deps.discoverCdpPort(previousState?.port || selectedPort);
+      const discoveredPort = await deps.discoverCdpPort(
+        previousState?.port || selectedPort,
+        force ? { maxOffset: 0, timeoutMs: 500 } : undefined,
+      );
       if (discoveredPort) {
         selectedPort = discoveredPort;
         cdpReady = true;

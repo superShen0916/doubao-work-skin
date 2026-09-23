@@ -68,7 +68,7 @@ try {
   await fs.copyFile(path.join(root, "assets/AppIcon.ico"), path.join(win, "assets/AppIcon.ico"));
   await fs.mkdir(path.join(win, "scripts"));
   for (const name of ["install.mjs", "installed-cli.mjs"]) await fs.copyFile(path.join(root, "scripts", name), path.join(win, "scripts", name));
-  await fs.writeFile(path.join(win, "先看这里.txt"), "首次使用：解压后双击 安装皮肤.cmd，按提示操作（会自动准备运行环境，需要联网）。\n装好后：从桌面双击「豆包工作皮肤」启动。\n需要重启时请保存工作并等待当前 Agent 任务结束，再从桌面入口确认一次。\n更新：下载新版重新解压并双击 安装皮肤.cmd；已有皮肤和偏好保留。\n支持范围：Windows 10/11 桌面版（x64），Microsoft Store 版与 ARM64 未实测。\n");
+  await fs.writeFile(path.join(win, "先看这里.txt"), "首次使用：解压后双击 安装皮肤.cmd，按提示操作（会自动准备运行环境，需要联网）。\n装好后：保存工作并等待当前任务结束，再从桌面双击「豆包工作皮肤」；双击即授权本次换肤重启，成功后会尝试把应用窗口切到前台。\n全程无需输入 y，也不会显示终端黑框；失败时会弹窗并保留 launcher.log。\n更新：下载新版重新解压并双击 安装皮肤.cmd；已有皮肤和偏好保留。\n支持范围：Windows 10/11 桌面版（x64），Microsoft Store 版与 ARM64 未实测。\n");
   const winZip = path.join(dist, `DoubaoWorkSkin-${pkg.version}-windows-scripts.zip`);
   await fs.rm(winZip, { force: true });
   zipDirectory(win, winZip);
