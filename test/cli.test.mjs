@@ -107,6 +107,31 @@ test("旧 watch 仍在时 start --force 可以重启应用并重新注入", asyn
   assert.deepEqual(events, ["stop-watch", "stop-app", "launch-app", "cdp-ready", "once", "spawn-watch", "verify", "write"]);
 });
 
+test("start --force 输出各阶段耗时与累计耗时", async () => {
+  const events = [];
+  const logs = [];
+  let clock = 0;
+  const cli = createCli(staleWatchDeps(events, {
+    now: () => { const current = clock; clock += 100; return current; },
+    log: (line) => logs.push(line),
+  }));
+  await cli.start("default", { force: true });
+  const timing = logs.filter((line) => line.startsWith("[timing]"));
+  assert.deepEqual(timing, [
+    "[timing] 读取配置与进程: 100ms（累计 100ms）",
+    "[timing] 探测现有 CDP: 100ms（累计 200ms）",
+    "[timing] 停止旧 watch: 100ms（累计 300ms）",
+    "[timing] 定位安装与端口: 100ms（累计 400ms）",
+    "[timing] 关闭旧豆包: 100ms（累计 500ms）",
+    "[timing] 发起新进程: 100ms（累计 600ms）",
+    "[timing] 等待 CDP 就绪: 100ms（累计 700ms）",
+    "[timing] 识别新主进程: 100ms（累计 800ms）",
+    "[timing] 首次注入: 100ms（累计 900ms）",
+    "[timing] 验证皮肤: 100ms（累计 1000ms）",
+    "[timing] 提交状态与偏好: 100ms（累计 1100ms）",
+  ]);
+});
+
 test("首次自定义安装路径：先定位再停止，将原 install 传给启动器", async () => {
   const events = [];
   let stopped = false;

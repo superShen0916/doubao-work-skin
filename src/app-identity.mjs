@@ -18,10 +18,16 @@ function macAllowlist() {
 // 而 assertDoubaoWorkPort 在每次 HTTP/WS 握手前都要建白名单。把结果缓存 30 秒，
 // 避免同一进程内反复 spawn。已知限制：缓存期内应用路径变化不会被察觉（安装路径在会话内基本不变，可接受）。
 export const DISCOVER_CACHE_TTL_MS = 30_000;
+export const PORT_OWNER_CACHE_TTL_MS = 1_000;
 let _cachedWinInstall = { install: null, at: 0 };
+const _verifiedPortOwners = new Map();
 
 export function _resetWinInstallCacheForTest() {
   _cachedWinInstall = { install: null, at: 0 };
+}
+
+export function _resetPortOwnerCacheForTest() {
+  _verifiedPortOwners.clear();
 }
 
 export async function discoverWinInstallCached(discover) {
@@ -55,20 +61,34 @@ export async function assertDoubaoWorkPort(port, deps = {}) {
     getProcessExecutable = platform.getProcessExecutable,
     discoverAppInstall = platform.discoverAppInstall,
     platformName = process.platform,
+    now = Date.now,
+    ownerCacheTtlMs = PORT_OWNER_CACHE_TTL_MS,
+    useOwnerCache = platformName === "win32"
+      && findListeningPids === platform.findListeningPids
+      && getProcessExecutable === platform.getProcessExecutable
+      && discoverAppInstall === platform.discoverAppInstall,
   } = deps;
-  // 只有生产默认 discover 才走缓存；测试注入的 mock 不缓存，避免用例间串味。
-  const useCache = platformName === "win32" && discoverAppInstall === platform.discoverAppInstall;
+  // 只有生产默认 discover 才缓存安装路径；测试注入的 mock 默认不缓存，避免用例间串味。
+  const useInstallCache = platformName === "win32" && discoverAppInstall === platform.discoverAppInstall;
+  const numericPort = Number(port);
+  const cacheKey = `${platformName}:${numericPort}`;
   try {
-    const pids = await findListeningPids(Number(port));
-    if (!pids || pids.length === 0) throw new Error("未找到监听进程");
-    const allow = platformName === "win32" ? await winAllowlist(discoverAppInstall, { useCache }) : macAllowlist();
+    const pids = [...new Set(await findListeningPids(numericPort))].sort((a, b) => a - b);
+    if (pids.length === 0) throw new Error("未找到监听进程");
+    const pidKey = pids.join(",");
+    const cached = useOwnerCache ? _verifiedPortOwners.get(cacheKey) : null;
+    if (cached && cached.pidKey === pidKey && now() - cached.at < ownerCacheTtlMs) return;
+
+    const allow = platformName === "win32" ? await winAllowlist(discoverAppInstall, { useCache: useInstallCache }) : macAllowlist();
     for (const pid of pids) {
       const exe = await getProcessExecutable(pid);
       const normalized = platformName === "win32" ? String(exe || "").toLowerCase() : String(exe || "").trim();
       if (!normalized) throw new Error("监听进程可执行文件路径为空");
       if (!allow.has(normalized)) throw new Error(`监听进程不属于豆包工作：${exe}`);
     }
+    if (useOwnerCache) _verifiedPortOwners.set(cacheKey, { pidKey, at: now() });
   } catch (error) {
+    if (useOwnerCache) _verifiedPortOwners.delete(cacheKey);
     throw new Error(`无法确认 CDP 端口 ${port} 属于豆包工作，已拒绝连接`, { cause: error });
   }
 }

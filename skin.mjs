@@ -169,6 +169,7 @@ export function createCli(overrides = {}) {
     waitForCdp,
     runInjector,
     verifyWithRetry,
+    now: Date.now,
     log: console.log,
     error: console.error,
     ...overrides,
@@ -281,6 +282,13 @@ export function createCli(overrides = {}) {
   }
 
   async function start(name = null, { port = DEFAULT_PORT, force = false } = {}) {
+    const startedAt = deps.now();
+    let phaseAt = startedAt;
+    const mark = (label) => {
+      const current = deps.now();
+      deps.log(`[timing] ${label}: ${current - phaseAt}ms（累计 ${current - startedAt}ms）`);
+      phaseAt = current;
+    };
     const previousState = await deps.readRuntimeState();
     if (!name) {
       const preferred = await deps.readPreferredTheme() || previousState?.skinName;
@@ -291,6 +299,7 @@ export function createCli(overrides = {}) {
     const candidate = await loadNamedTheme(name);
     const existingWatch = previousState ? await deps.readWatchProcess({ state: previousState }) : null;
     let appPid = await deps.findDoubaoWorkPid();
+    mark("读取配置与进程");
     let selectedPort = port;
     let cdpReady = false;
     if (appPid) {
@@ -302,12 +311,14 @@ export function createCli(overrides = {}) {
         selectedPort = discoveredPort;
         cdpReady = true;
       }
+      mark("探测现有 CDP");
     }
     // watch 独立于应用存活；应用正常重开后可能已没有 CDP。
     if (existingWatch && cdpReady && existingWatch.port === selectedPort && previousState.port === selectedPort) {
       return switchTheme(name);
     }
     await deps.stopWatchProcess({ state: previousState });
+    mark("停止旧 watch");
     // 只有需要启动时才定位；必须在停止应用前完成，失败时保留宿主。
     let install = null;
     if (!cdpReady) {
@@ -315,20 +326,27 @@ export function createCli(overrides = {}) {
       install = await deps.discoverAppInstall();
       if (!install?.mainBinary) throw Object.assign(new Error("未找到可用于启动的豆包工作安装位置，未退出应用。请先正常打开豆包工作后重试。"), { exitCode: EXIT_PRECONDITION });
       selectedPort = await deps.selectAvailablePort(selectedPort);
+      mark("定位安装与端口");
       if (appPid) {
         await deps.stopDoubaoWork({ pid: appPid });
         appPid = null;
       }
+      mark("关闭旧豆包");
       await deps.launchDoubaoWork({ port: selectedPort, install });
+      mark("发起新进程");
       await deps.waitForCdp(selectedPort);
+      mark("等待 CDP 就绪");
       appPid = await deps.findDoubaoWorkPid();
+      mark("识别新主进程");
     }
     let watchPid = null;
     try {
       const injected = await deps.runInjector("once", { port: selectedPort, skinDir: candidate.directoryPath, timeoutMs: 20_000 });
       if (!injected.ok) throw new Error(`首次注入失败:\n${formatFailure(injected)}`);
+      mark("首次注入");
       watchPid = await deps.spawnWatchProcess({ port: selectedPort, skinDir: candidate.directoryPath });
       await deps.verifyWithRetry(candidate.directoryPath, selectedPort, { run: deps.runInjector });
+      mark("验证皮肤");
       await deps.writeRuntimeState(stateForTheme(candidate, {
         port: selectedPort,
         injectorPid: watchPid,
@@ -337,6 +355,7 @@ export function createCli(overrides = {}) {
       }));
       deps.log(`换肤已启动：${candidate.theme.name}，CDP ${selectedPort}，watch PID ${watchPid}`);
       await saveSelection(name);
+      mark("提交状态与偏好");
       return 0;
     } catch (error) {
       if (watchPid) await deps.stopWatchProcess({ state: { injectorPid: watchPid } }).catch(() => {});

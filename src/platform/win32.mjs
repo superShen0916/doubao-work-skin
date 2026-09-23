@@ -287,15 +287,34 @@ export async function launchApp(install, port, { logFd, errorFd } = {}) {
 
 // ─── 端口与进程 ─────────────────────────────────────────
 
-export async function findListeningPids(port) {
+export function parseNetstatListeningPids(output, port) {
+  const numericPort = Number(port);
+  if (!Number.isInteger(numericPort) || numericPort < 1 || numericPort > 65535) return [];
+  const suffix = `:${numericPort}`;
+  const pids = new Set();
+  for (const line of String(output || "").split(/\r?\n/)) {
+    const columns = line.trim().split(/\s+/);
+    if (columns.length < 5 || columns[0].toUpperCase() !== "TCP") continue;
+    const [localAddress, foreignAddress, state, pidText] = columns.slice(1);
+    if (!localAddress.endsWith(suffix)) continue;
+    // Windows 的状态文本可能本地化；监听套接字的远端端口固定为 0。
+    if (state.toUpperCase() !== "LISTENING" && !foreignAddress.endsWith(":0")) continue;
+    const pid = Number(pidText);
+    if (Number.isInteger(pid) && pid > 0) pids.add(pid);
+  }
+  return [...pids];
+}
+
+export async function findListeningPids(port, { execFileImpl = execFileAsync } = {}) {
   try {
-    const script = `
-      $conns = Get-NetTCPConnection -State Listen -LocalPort ${Number(port)} -ErrorAction SilentlyContinue
-      if (-not $conns) { exit 0 }
-      $conns | Select-Object -ExpandProperty OwningProcess -Unique
-    `;
-    const output = await runPowerShell(script);
-    return output.split("\n").map((line) => Number(line.trim())).filter((n) => n > 0);
+    // netstat 是系统原生命令，启动开销远低于每轮创建 PowerShell/.NET 会话。
+    const { stdout } = await execFileImpl("netstat", ["-ano", "-p", "tcp"], {
+      encoding: "utf8",
+      timeout: 2_000,
+      maxBuffer: 4 * 1024 * 1024,
+      windowsHide: true,
+    });
+    return parseNetstatListeningPids(stdout, port);
   } catch {
     return [];
   }

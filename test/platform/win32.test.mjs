@@ -17,6 +17,31 @@ import { execFileSync } from "node:child_process";
 // 直接导入 win32 实现，绕过 platform/index.mjs 的 process.platform 选择
 import * as win32 from "../../src/platform/win32.mjs";
 
+test("parseNetstatListeningPids：解析 IPv4/IPv6、去重并忽略其他端口", () => {
+  const output = [
+    "  TCP    127.0.0.1:9342       0.0.0.0:0       LISTENING       321",
+    "  TCP    [::1]:9342           [::]:0          LISTENING       321",
+    "  TCP    127.0.0.1:9343       0.0.0.0:0       LISTENING       654",
+    "  UDP    127.0.0.1:9342       *:*                             999",
+  ].join("\r\n");
+  assert.deepEqual(win32.parseNetstatListeningPids(output, 9342), [321]);
+  assert.deepEqual(win32.parseNetstatListeningPids(output, 9343), [654]);
+  assert.deepEqual(win32.parseNetstatListeningPids(output, 0), []);
+});
+
+test("findListeningPids：调用系统 netstat，不启动 PowerShell", async () => {
+  const calls = [];
+  const pids = await win32.findListeningPids(9342, {
+    execFileImpl: async (file, args, options) => {
+      calls.push({ file, args, options });
+      return { stdout: "TCP  127.0.0.1:9342  0.0.0.0:0  LISTENING  777\r\n" };
+    },
+  });
+  assert.deepEqual(pids, [777]);
+  assert.equal(calls[0].file, "netstat");
+  assert.deepEqual(calls[0].args, ["-ano", "-p", "tcp"]);
+});
+
 test("isProcessAlive：使用 Node 原生 signal 0，EPERM 视为存活", async () => {
   const calls = [];
   assert.equal(await win32.isProcessAlive(123, { killImpl(pid, signal) { calls.push([pid, signal]); } }), true);

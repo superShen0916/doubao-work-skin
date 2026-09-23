@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { assertDoubaoWorkPort, discoverWinInstallCached, _resetWinInstallCacheForTest, DOUBAOWORK_BINARY, DOUBAOWORK_BROWSER_BINARY } from "../src/app-identity.mjs";
+import { assertDoubaoWorkPort, discoverWinInstallCached, _resetWinInstallCacheForTest, _resetPortOwnerCacheForTest, PORT_OWNER_CACHE_TTL_MS, DOUBAOWORK_BINARY, DOUBAOWORK_BROWSER_BINARY } from "../src/app-identity.mjs";
 import { discoverCdpPort } from "../src/runtime.mjs";
 
 const WIN_MAIN = "C:\\Users\\tester\\AppData\\Local\\DoubaoWork\\Application\\app\\DoubaoWork.exe";
@@ -84,6 +84,53 @@ test("只有其他应用的 CDP 时发现结果为空，即使声称自己是豆
     fetchImpl: async () => assert.fail("身份不符不能读取 CDP 自报信息"),
   });
   assert.equal(port, null);
+});
+
+test("端口归属正向结果短缓存：同 PID 复用，PID 变化或过期立即重查", async () => {
+  _resetPortOwnerCacheForTest();
+  let clock = 1_000;
+  let pids = [100];
+  let exeCalls = 0;
+  const base = {
+    platformName: "win32",
+    useOwnerCache: true,
+    now: () => clock,
+    ownerCacheTtlMs: PORT_OWNER_CACHE_TTL_MS,
+    findListeningPids: async () => pids,
+    getProcessExecutable: async () => { exeCalls++; return WIN_MAIN; },
+    discoverAppInstall: async () => ({ mainBinary: WIN_MAIN, helperBinary: WIN_HELPER }),
+  };
+  await assertDoubaoWorkPort(9342, base);
+  await assertDoubaoWorkPort(9342, base);
+  assert.equal(exeCalls, 1, "相同 PID 集合在短 TTL 内应复用完整核验结果");
+
+  pids = [101];
+  await assertDoubaoWorkPort(9342, base);
+  assert.equal(exeCalls, 2, "监听 PID 变化必须立即重新核验可执行路径");
+
+  clock += PORT_OWNER_CACHE_TTL_MS + 1;
+  await assertDoubaoWorkPort(9342, base);
+  assert.equal(exeCalls, 3, "TTL 过期必须重新核验");
+  _resetPortOwnerCacheForTest();
+});
+
+test("端口归属失败永不缓存", async () => {
+  _resetPortOwnerCacheForTest();
+  let exe = "C:\Program Files\Google\Chrome\Chrome.exe";
+  let exeCalls = 0;
+  const deps = {
+    platformName: "win32",
+    useOwnerCache: true,
+    now: () => 1_000,
+    findListeningPids: async () => [200],
+    getProcessExecutable: async () => { exeCalls++; return exe; },
+    discoverAppInstall: async () => ({ mainBinary: WIN_MAIN, helperBinary: WIN_HELPER }),
+  };
+  await assert.rejects(assertDoubaoWorkPort(9342, deps), /已拒绝连接/);
+  exe = WIN_MAIN;
+  await assert.doesNotReject(assertDoubaoWorkPort(9342, deps));
+  assert.equal(exeCalls, 2, "失败结果不得阻止下一次完整核验");
+  _resetPortOwnerCacheForTest();
 });
 
 test("M6：discoverWinInstallCached 30 秒内复用缓存；reset 后重新发现", async () => {
