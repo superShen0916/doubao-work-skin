@@ -8,6 +8,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { prepareUserData, agentPrompt, defaultDataRoot, shellQuote } from "../src/user-data.mjs";
 import { DOUBAOWORK_PGREP_PATTERN } from "../src/app-identity.mjs";
+import { powerShellArgs, quotePowerShellString } from "../src/platform/powershell.mjs";
 import {
   launcherScripts as platformLauncherScripts,
   createDesktopShortcut,
@@ -183,16 +184,16 @@ function powershellExe() {
 export async function isEngineInUse(enginePath, { execImpl = exec } = {}) {
   if (!IS_WIN) return false;
   try {
-    const escaped = enginePath.replace(/'/g, "''");
+    const engineLiteral = quotePowerShellString(enginePath);
     const script = `
       $rows = Get-CimInstance Win32_Process | Where-Object {
         ($_.ExecutablePath -like '*node.exe') -and $_.CommandLine -and
-        ($_.CommandLine.IndexOf('${escaped}', [StringComparison]::OrdinalIgnoreCase) -ge 0) -and
+        ($_.CommandLine.IndexOf(${engineLiteral}, [StringComparison]::OrdinalIgnoreCase) -ge 0) -and
         ($_.CommandLine -match 'injector|watch|skin\\.mjs|installed-cli|skin\\.cmd')
       }
       @($rows).Count
     `;
-    const { stdout } = await execImpl(powershellExe(), ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script], { windowsHide: true, timeout: 2_000, encoding: "utf8" });
+    const { stdout } = await execImpl(powershellExe(), powerShellArgs(script), { windowsHide: true, timeout: 2_000, encoding: "utf8" });
     return Number(String(stdout).trim()) > 0;
   } catch {
     return false;

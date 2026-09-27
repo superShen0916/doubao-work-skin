@@ -11,6 +11,7 @@ import { terminateProcess, isProcessAlive, silentLauncherScript } from "../../sr
 import { launcherMutexName } from "../../src/platform/windows-launcher.mjs";
 import { inspectWatchProcess } from "../../src/runtime.mjs";
 import { isEngineInUse } from "../../scripts/install.mjs";
+import { powerShellArgs } from "../../src/platform/powershell.mjs";
 
 const exec = promisify(execFile);
 const windows = { skip: process.platform !== "win32" && "仅 Windows" };
@@ -82,15 +83,30 @@ test("Windows app spawn reports async ENOENT and does not hide its GUI", async (
   await assert.rejects(spawnApp('unused', 65536, { spawnImpl: () => assert.fail('invalid port must not spawn') }), /无效端口/);
 });
 
+test("PowerShell transport is ASCII and preserves Unicode", () => {
+  const script = "Write-Output '中文路径 日本語';";
+  const args = powerShellArgs(script);
+  assert.ok(args.includes('-EncodedCommand'));
+  assert.ok(args.every(arg => Array.from(arg).every(ch => ch.charCodeAt(0) <= 127)));
+  assert.ok(Buffer.from(args.at(-1), 'base64').toString('utf16le').endsWith(script));
+});
+
+test("PowerShell Unicode round trip", windows, async () => {
+  const { stdout } = await exec('powershell.exe', powerShellArgs("[Console]::OutputEncoding=[Text.Encoding]::UTF8;Write-Output '中文路径 日本語'"), { encoding: 'utf8', windowsHide: true });
+  assert.equal(stdout.trim(), '中文路径 日本語');
+});
+
 test("generated launcher parses under PS 5.1 and native window helper compiles", windows, async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "dws-parse-"));
   const ps1 = path.join(root, "launcher.ps1");
   const source = new URL("../../src/platform/windows-window.cs", import.meta.url);
+  const shortcutSource = new URL("../../src/platform/windows-shortcut.cs", import.meta.url);
   try {
     await fs.writeFile(ps1, "\uFEFF" + silentLauncherScript("ignored", "C:\\User's 皮肤"), "utf8");
     const csPath = (await import("node:url")).fileURLToPath(source).replaceAll("'", "''");
-    const script = `$tokens=$null;$errors=$null;[System.Management.Automation.Language.Parser]::ParseFile('${ps1.replaceAll("'", "''")}',[ref]$tokens,[ref]$errors) | Out-Null;if($errors.Count){throw ($errors | Out-String)};Add-Type -TypeDefinition ([IO.File]::ReadAllText('${csPath}'));$type=[DoubaoWorkSkin.WindowActivation];if($type.TryActivate(0) -ne 'invalid-pid'){throw 'guard failed'};$source=[IO.File]::ReadAllText('${csPath}');foreach($api in 'AttachThreadInput','BringWindowToTop','GetCurrentThreadId'){if($source -notmatch $api){throw "missing $api"}};if(-not $type.GetMethod('FindWindow',[Reflection.BindingFlags]'NonPublic,Static')){throw 'FindWindow missing'};Write-Output 'parser-and-compiler-ok'`;
-    const result = await exec("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], { windowsHide: true, timeout: 15000 });
+    const shortcutCsPath = (await import("node:url")).fileURLToPath(shortcutSource).replaceAll("'", "''");
+    const script = `$tokens=$null;$errors=$null;[System.Management.Automation.Language.Parser]::ParseFile('${ps1.replaceAll("'", "''")}',[ref]$tokens,[ref]$errors) | Out-Null;if($errors.Count){throw ($errors | Out-String)};Add-Type -TypeDefinition ([IO.File]::ReadAllText('${csPath}'));Add-Type -TypeDefinition ([IO.File]::ReadAllText('${shortcutCsPath}'));$type=[DoubaoWorkSkin.WindowActivation];if($type::TryActivate(0) -ne 'invalid-pid'){throw 'guard failed'};$shortcutType=[DoubaoWorkSkin.Shortcut];if($shortcutType.GetMethod('Save') -eq $null -or $shortcutType.GetMethod('GetTarget') -eq $null){throw 'shortcut helper missing'};$source=[IO.File]::ReadAllText('${csPath}');foreach($api in 'AttachThreadInput','BringWindowToTop','GetCurrentThreadId'){if($source -notmatch $api){throw "missing $api"}};if(-not $type.GetMethod('FindWindow',[Reflection.BindingFlags]'NonPublic,Static')){throw 'FindWindow missing'};Write-Output 'parser-and-compiler-ok'`;
+    const result = await exec("powershell.exe", powerShellArgs(script), { windowsHide: true, timeout: 15000 });
     assert.match(result.stdout, /parser-and-compiler-ok/);
   } finally { await fs.rm(root, { recursive: true, force: true }); }
 });

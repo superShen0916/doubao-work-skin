@@ -11,9 +11,19 @@ $env:DWS_STATE_ROOT = $dataRoot
 # Match skin.cmd: inherited Node hooks must not execute in our private runtime.
 Remove-Item Env:NODE_OPTIONS, Env:NODE_PATH -ErrorAction Ignore
 
+$script:logUnavailable = $false
 function Write-Log([string]$Message) {
-    $line = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + ' ' + $Message
-    Add-Content -LiteralPath $log -Value $line -Encoding UTF8 -ErrorAction Stop
+    if ($script:logUnavailable) { return }
+    for ($attempt = 0; $attempt -lt 4; $attempt++) {
+        try {
+            $line = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + ' ' + $Message
+            Add-Content -LiteralPath $log -Value $line -Encoding UTF8 -ErrorAction Stop
+            return
+        } catch {
+            if ($attempt -lt 3) { Start-Sleep -Milliseconds 50 }
+        }
+    }
+    $script:logUnavailable = $true
 }
 
 function Show-Failure([string]$Message) {
@@ -80,27 +90,32 @@ function Activate-DoubaoWork {
 
 $mutex = $null
 $acquired = $false
+$exitCode = 1
 try {
     $mutex = New-Object System.Threading.Mutex($false, $mutexName)
     try { $acquired = $mutex.WaitOne(0) } catch [System.Threading.AbandonedMutexException] { $acquired = $true }
-    if (-not $acquired) { Write-Log '已有启动器在运行，静默退出'; exit 0 }
-    Write-Log '桌面入口：直接 start --force'
-    $code = Invoke-Skin
-    Write-Log ('force exit=' + $code)
-    if ($code -eq 0) { Activate-DoubaoWork }
-    else {
-        Write-Log ('失败 code=' + $code)
-        Show-Failure ('豆包工作皮肤启动失败（错误码 ' + $code + '）。')
+    if (-not $acquired) {
+        $exitCode = 0
+        Write-Log '已有启动器在运行，静默退出'
+    } else {
+        Write-Log '桌面入口：直接 start --force'
+        $exitCode = Invoke-Skin
+        Write-Log ('force exit=' + $exitCode)
+        if ($exitCode -eq 0) { Activate-DoubaoWork }
+        else {
+            Write-Log ('失败 code=' + $exitCode)
+            Show-Failure ('豆包工作皮肤启动失败（错误码 ' + $exitCode + '）。')
+        }
     }
-    exit $code
 } catch {
-    # Logging itself may fail (read-only/full disk); don't lose the original error.
     $message = '启动器异常：' + $_.Exception.Message
-    try { Write-Log $message } catch {}
-    try { Show-Failure $message } catch {}
-    exit 1
+    Write-Log $message
+    if ($exitCode -ne 0) { try { Show-Failure $message } catch {} }
 } finally {
-    if ($acquired) { try { $mutex.ReleaseMutex() } catch {} }
-    if ($null -ne $mutex) { $mutex.Dispose() }
-    if ($acquired) { try { Write-Log 'launcher completed' } catch {} }
+    if ($acquired) {
+        Write-Log 'launcher completed'
+        try { $mutex.ReleaseMutex() } catch {}
+    }
+    if ($null -ne $mutex) { try { $mutex.Dispose() } catch {} }
 }
+exit $exitCode

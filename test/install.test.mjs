@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { execFile } from "node:child_process";
+import { realpathSync } from "node:fs";
 import { promisify } from "node:util";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { install, installTargets, launcherApp, launcherScripts as macLauncherScripts } from "../scripts/install.mjs";
@@ -30,7 +31,9 @@ test("经符号链接打开的项目仍实际运行 CLI，而非静默退出", a
 });
 
 async function fixture(fn) {
-  const temp = await fs.mkdtemp(path.join(os.tmpdir(), "dws-install-"));
+  const tempRaw = await fs.mkdtemp(path.join(os.tmpdir(), "dws-install-"));
+  // WScript.Shell COM rejects the 8.3 TEMP path used on GitHub-hosted Windows runners.
+  const temp = process.platform === "win32" ? realpathSync.native(tempRaw) : tempRaw;
   try {
     const projectRoot = path.join(temp, "project");
     const runtimeDir = path.join(temp, "runtime");

@@ -17,6 +17,7 @@ import { execFileSync } from "node:child_process";
 // 直接导入 win32 实现，绕过 platform/index.mjs 的 process.platform 选择
 import * as win32 from "../../src/platform/win32.mjs";
 import { launcherMutexName } from "../../src/platform/windows-launcher.mjs";
+import { powerShellArgs, quotePowerShellString } from "../../src/platform/powershell.mjs";
 
 test("parseNetstatListeningPids：解析 IPv4/IPv6、去重并忽略其他端口", () => {
   const output = [
@@ -249,8 +250,18 @@ test("pickMainProcessRow：命令行空/缺失时返回 null，不误判为主�
 });
 
 
+function makeLongTempDir(prefix) {
+  // GitHub-hosted Windows runners may expose TEMP through an 8.3 path; WScript.Shell COM rejects that form.
+  return fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));
+}
+
+test("quotePowerShellString：使用 PowerShell 单引号字面量并双写单引号", () => {
+  assert.equal(quotePowerShellString("C:\\Users\\开发 者\\skin.ps1"), "'C:\\Users\\开发 者\\skin.ps1'");
+  assert.equal(quotePowerShellString("C:\\Tools\\O''Hair.ps1"), "'C:\\Tools\\O''''Hair.ps1'");
+});
+
 test("createDesktopShortcut：生成指向启动cmd的.lnk，含 WorkingDirectory/Description/IconLocation", { skip: process.platform !== "win32" }, async () => {
-  const desktop = fs.mkdtempSync(path.join(os.tmpdir(), "dws-desk-"));
+  const desktop = makeLongTempDir("dws-desk-");
   try {
     const launcher = path.join(desktop, "启动豆包工作.cmd");
     fs.writeFileSync(launcher, "@echo off\r\n");
@@ -260,19 +271,17 @@ test("createDesktopShortcut：生成指向启动cmd的.lnk，含 WorkingDirector
       iconPath: icon, description: "启动带皮肤的豆包工作", workingDir: desktop, legacyFolderPath: desktop,
       shortcutArguments: "-WindowStyle Hidden -NoProfile -File C:\\test\\启动豆包工作皮肤.ps1",
     });
-    const read = (prop) => execFileSync("powershell.exe",
-      ["-NoProfile","-Command",`(New-Object -ComObject WScript.Shell).CreateShortcut('${link}').${prop}`],
-      { encoding: "utf8" }).trim();
-    assert.equal(read("TargetPath"), launcher);
-    assert.equal(read("WorkingDirectory"), desktop);
-    assert.equal(read("Description"), "启动带皮肤的豆包工作");
-    assert.match(read("IconLocation"), /AppIcon\.ico,?0?$/);
-    assert.match(read("Arguments"), /-WindowStyle Hidden/);
+    const read = async (prop) => (await win32.readDesktopShortcut(link))[prop];
+    assert.equal(await read("TargetPath"), launcher);
+    assert.equal(await read("WorkingDirectory"), desktop);
+    assert.equal(await read("Description"), "启动带皮肤的豆包工作");
+    assert.match(await read("IconLocation"), /AppIcon\.ico,?0$/);
+    assert.match(await read("Arguments"), /-WindowStyle Hidden/);
   } finally { fs.rmSync(desktop, { recursive: true, force: true }); }
 });
 
 test("createDesktopShortcut：PowerShell 目标还需匹配 -File 参数才视为本项目入口", { skip: process.platform !== "win32" }, async () => {
-  const desktop = fs.mkdtempSync(path.join(os.tmpdir(), "dws-desk-args-"));
+  const desktop = makeLongTempDir("dws-desk-args-");
   try {
     const powershell = path.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
     const ours = path.join(desktop, "启动入口", "启动豆包工作皮肤.ps1");
@@ -292,20 +301,18 @@ test("createDesktopShortcut：PowerShell 目标还需匹配 -File 参数才视�
 });
 
 test("createDesktopShortcut：旧版指向文件夹的.lnk 可升级，指向其他目标不覆盖", { skip: process.platform !== "win32" }, async () => {
-  const desktop = fs.mkdtempSync(path.join(os.tmpdir(), "dws-desk2-"));
+  const desktop = makeLongTempDir("dws-desk2-");
   try {
     const folder = path.join(desktop, "启动入口");
     fs.mkdirSync(folder, { recursive: true });
     const launcher = path.join(folder, "启动豆包工作.cmd");
     fs.writeFileSync(launcher, "@echo off\r\n");
     const link = path.join(desktop, "豆包工作皮肤.lnk");
-    // 先建一个指向文件夹的旧版 .lnk
-    execFileSync("powershell.exe", ["-NoProfile","-Command",
-      `$ws=New-Object -ComObject WScript.Shell;$s=$ws.CreateShortcut('${link}');$s.TargetPath='${folder}';$s.Save()`]);
+    // 先建一个指向文件夹的旧版 .lnk（直接走 Unicode COM，模拟历史版本产物）
+    await win32.writeDesktopShortcut({ linkPath: link, targetPath: folder });
     // 升级为直接指向 cmd（legacyFolderPath=folder）
     await win32.createDesktopShortcut(launcher, "豆包工作皮肤", desktop, { workingDir: folder, legacyFolderPath: folder });
-    const target = execFileSync("powershell.exe", ["-NoProfile","-Command",
-      `(New-Object -ComObject WScript.Shell).CreateShortcut('${link}').TargetPath`], { encoding: "utf8" }).trim();
+    const target = (await win32.readDesktopShortcut(link)).TargetPath;
     assert.equal(target, launcher);
     // 不同目标不覆盖
     await assert.rejects(
@@ -335,7 +342,7 @@ test("paths：无 DWS_DESKTOP_DIR 时 desktopDir 走 Known Folder 且结果缓�
   win32._resetDesktopDirCacheForTest();
   try {
     const expected = execFileSync("powershell.exe",
-      ["-NoProfile", "-NonInteractive", "-Command", "[Environment]::GetFolderPath('Desktop')"],
+      powerShellArgs("[Environment]::GetFolderPath('Desktop')"),
       { encoding: "utf8" }).trim();
     assert.ok(expected, "Known Folder 应返回非空桌面路径");
     const p1 = win32.paths();

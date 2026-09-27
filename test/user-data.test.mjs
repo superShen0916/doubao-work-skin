@@ -9,6 +9,27 @@ import { prepareUserData, agentPrompt } from "../src/user-data.mjs";
 
 const execFileAsync = promisify(execFile);
 
+// On Windows a freshly-spawned node.exe can stay locked for a moment after the
+// child exits (process teardown / Defender scan). Retry the temp cleanup so a
+// transient EBUSY/EPERM/ENOTEMPTY does not turn into a false test failure.
+async function rmWithRetry(target, { tries = 10, delayMs = 100 } = {}) {
+  let lastError;
+  for (let attempt = 0; attempt < tries; attempt++) {
+    try {
+      await fs.rm(target, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      lastError = error;
+      if (process.platform !== "win32"
+        || !["EBUSY", "EPERM", "ENOTEMPTY", "EMFILE"].includes(error.code)) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+  throw lastError;
+}
+
 async function fixture(fn) {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "dws-desktop-"));
   try {
@@ -19,7 +40,7 @@ async function fixture(fn) {
     await fs.writeFile(path.join(projectRoot, "skins/sample/theme.json"), '{"id":"sample"}');
     await fs.writeFile(path.join(projectRoot, "AGENTS.md"), "Agent instructions v1");
     await fn({ projectRoot, dataRoot, enginePath });
-  } finally { await fs.rm(directory, { recursive: true, force: true }); }
+  } finally { await rmWithRetry(directory); }
 }
 
 test("首次安装复制内置皮肤，升级保留个人皮肤、修改与状态，仅补充新主题", async () => {
@@ -109,5 +130,5 @@ test("中文+空格路径下 .cmd 入口仍正确透传参数", async () => {
         "start", "海风 微语",
       ]);
     }
-  } finally { await fs.rm(directory, { recursive: true, force: true }); }
+  } finally { await rmWithRetry(directory); }
 });

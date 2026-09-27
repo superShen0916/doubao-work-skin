@@ -178,6 +178,83 @@ test("桌面 ps1：缺少 Node 时明确失败，不假报成功", { skip: proce
   } finally { removeFixture(fx.dataRoot); }
 });
 
+function instrumentFixture(fx) {
+  const script = fs.readFileSync(fx.ps1Path, 'utf8');
+  const activation = path.join(fx.dataRoot, 'activation-called');
+  const failure = path.join(fx.dataRoot, 'failure-called');
+  const quote = value => value.replaceAll("'", "''");
+  fs.writeFileSync(fx.ps1Path, script.replace('$mutex = $null', `
+function Activate-DoubaoWork { [IO.File]::WriteAllText('${quote(activation)}', 'called') }
+function Show-Failure([string]$Message) { [IO.File]::WriteAllText('${quote(failure)}', $Message) }
+$mutex = $null`), 'utf8');
+  return { activation, failure };
+}
+
+function holdLog(fx, share) {
+  const ready = path.join(fx.dataRoot, 'lock-ready');
+  const release = path.join(fx.dataRoot, 'lock-release');
+  const script = `
+$ErrorActionPreference='Stop'
+$f=[IO.File]::Open('${path.join(fx.dataRoot,'launcher.log')}',[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::ReadWrite,[IO.FileShare]::${share})
+try {
+  [IO.File]::WriteAllText('${ready}', 'ready')
+  $deadline=[DateTime]::UtcNow.AddSeconds(25)
+  while (-not [IO.File]::Exists('${release}') -and [DateTime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 20 }
+} finally { $f.Dispose() }
+`;
+  const child = spawn(PS, ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script,'utf16le').toString('base64')], { stdio:'ignore', windowsHide:true });
+  waitForFile(ready);
+  return async () => {
+    const exited = new Promise(resolve => child.once('exit', resolve));
+    fs.writeFileSync(release, 'release');
+    await exited;
+  };
+}
+
+for (const code of [0, 7]) {
+  test(`日志独占锁耗尽重试仍保留真实退出码 ${code}`, { skip: process.platform !== 'win32' }, async () => {
+    const fx = makeFixture(code);
+    const markers = instrumentFixture(fx);
+    const release = holdLog(fx, 'None');
+    try {
+      assert.equal(runPs1(fx), code);
+      assert.deepEqual(readCalls(fx), ['start --force']);
+      assert.equal(fs.existsSync(markers.activation), code === 0);
+      assert.equal(fs.existsSync(markers.failure), code !== 0);
+    } finally { await release(); removeFixture(fx.dataRoot); }
+  });
+}
+
+test('日志路径不可写也不阻断成功启动、窗口恢复或污染返回值', { skip: process.platform !== 'win32' }, () => {
+  const fx = makeFixture(0);
+  const markers = instrumentFixture(fx);
+  try {
+    assert.equal(runPs1(fx, { DWS_LAUNCHER_LOG: fx.dataRoot }), 0);
+    assert.deepEqual(readCalls(fx), ['start --force']);
+    assert.ok(fs.existsSync(markers.activation));
+    assert.equal(fs.existsSync(markers.failure), false);
+  } finally { removeFixture(fx.dataRoot); }
+});
+
+test('日志短暂失败会重试且重试预算有界', { skip: process.platform !== 'win32' }, () => {
+  const fx = makeFixture(0);
+  const scriptPath = path.join(fx.dataRoot, 'logger-test.ps1');
+  try {
+    const source = fs.readFileSync(fx.ps1Path, 'utf8').split('$mutex = $null')[0];
+    fs.writeFileSync(scriptPath, source + `
+$script:writes=0
+function Add-Content { $script:writes++; if ($script:writes -lt 3) { throw [IO.IOException]::new('transient') } }
+Write-Log 'retry'
+if ($script:writes -ne 3) { throw 'retry contract' }
+$script:writes=0
+function Add-Content { $script:writes++; throw [IO.IOException]::new('locked') }
+Write-Log 'exhaust'
+Write-Log 'no further delay'
+if ($script:writes -ne 4) { throw 'bounded budget' }
+`, 'utf8');
+    execFileSync(PS, ['-NoProfile','-NonInteractive','-File',scriptPath], { env:fixtureEnv(fx),timeout:15000,windowsHide:true });
+  } finally { removeFixture(fx.dataRoot); }
+});
 test("Windows 安装计划将桌面快捷方式指向 wscript + 正式 VBS", () => {
   const shortcuts = "C:\\Users\\Test User\\AppData\\Local\\DoubaoWorkSkin\\启动入口";
   const plan = installTargets("win32", {

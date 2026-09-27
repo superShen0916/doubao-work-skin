@@ -26,7 +26,8 @@ namespace DoubaoWorkSkin {
             // SetForegroundWindow normally permits only the current foreground
             // thread. AttachThreadInput is the minimal documented focus handshake;
             // it injects no keys and does not bypass system foreground locks.
-            uint foregroundThread = GetWindowThreadProcessId(GetForegroundWindow(), out _);
+            uint foregroundProcessId;
+            uint foregroundThread = GetWindowThreadProcessId(GetForegroundWindow(), out foregroundProcessId);
             uint currentThread = GetCurrentThreadId();
             bool attached = foregroundThread != 0 && foregroundThread != currentThread
                 && AttachThreadInput(currentThread, foregroundThread, true);

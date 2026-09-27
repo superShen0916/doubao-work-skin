@@ -19,18 +19,27 @@ import { silentLauncherScript, silentLauncherHostScript } from "./windows-launch
 export { silentLauncherScript, silentLauncherHostScript } from "./windows-launcher.mjs";
 
 import { spawnApp } from "./spawn-app.mjs";
+import { powerShellArgs, quotePowerShellString as psQuote } from "./powershell.mjs";
 const execFileAsync = promisify(execFile);
 
 const POWERSHELL = "powershell.exe";
-const PS_ARGS = ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command"];
+
+const shortcutSourcePromise = fs.readFile(new URL("./windows-shortcut.cs", import.meta.url), "utf8");
+
+async function runShortcut(script, { timeout = 5_000 } = {}) {
+  const source = await shortcutSourcePromise;
+  // The single-quoted here-string terminator must begin at column 0 in PowerShell.
+  return runPowerShell(`if (-not ([System.Management.Automation.PSTypeName]'DoubaoWorkSkin.Shortcut').Type) {
+  Add-Type -TypeDefinition @'
+${source}
+'@
+}
+${script}`, { timeout });
+}
+
 
 async function runPowerShell(script, { timeout = 10_000 } = {}) {
-  // 设置输出编码为 UTF-8，确保中文路径和输出正确解码
-  const wrapped = `
-    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-    ${script}
-  `;
-  const { stdout, stderr } = await execFileAsync(POWERSHELL, [...PS_ARGS, wrapped], {
+  const { stdout } = await execFileAsync(POWERSHELL, powerShellArgs(script), {
     encoding: "utf8",
     timeout,
     maxBuffer: 4 * 1024 * 1024,
@@ -57,10 +66,7 @@ let _desktopDirCache = null;
 function detectDesktopDir() {
   if (_desktopDirCache) return _desktopDirCache;
   try {
-    const out = execFileSync(POWERSHELL, [
-      "-NoProfile", "-NonInteractive", "-Command",
-      "[Environment]::GetFolderPath('Desktop')",
-    ], { encoding: "utf8", timeout: 5_000, windowsHide: true }).trim();
+    const out = execFileSync(POWERSHELL, powerShellArgs("[Environment]::GetFolderPath('Desktop')"), { encoding: "utf8", timeout: 5_000, windowsHide: true }).trim();
     _desktopDirCache = out || path.join(os.homedir(), "Desktop");
   } catch {
     _desktopDirCache = path.join(os.homedir(), "Desktop");
@@ -406,23 +412,58 @@ export function launcherScripts(command, dataRoot) {
 
 // ─── 桌面快捷方式 ───────────────────────────────────────
 
+export async function readDesktopShortcut(linkPath) {
+  const readScript = `
+    [PSCustomObject]@{
+      TargetPath = [DoubaoWorkSkin.Shortcut]::GetTarget(${psQuote(linkPath)})
+      Arguments = [DoubaoWorkSkin.Shortcut]::GetArguments(${psQuote(linkPath)})
+      Description = [DoubaoWorkSkin.Shortcut]::GetDescription(${psQuote(linkPath)})
+      WorkingDirectory = [DoubaoWorkSkin.Shortcut]::GetWorkingDirectory(${psQuote(linkPath)})
+      IconLocation = [DoubaoWorkSkin.Shortcut]::GetIconLocation(${psQuote(linkPath)})
+    } | ConvertTo-Json -Compress
+  `;
+  return parsePowerShellJson(await runShortcut(readScript));
+}
+
+export async function writeDesktopShortcut({ linkPath, targetPath, arguments: argumentsValue = "", description = "", workingDirectory = "", iconPath = "" }) {
+  await fs.mkdir(path.dirname(linkPath), { recursive: true });
+  const script = `
+    [DoubaoWorkSkin.Shortcut]::Save(
+      ${psQuote(linkPath)},
+      ${psQuote(targetPath)},
+      ${psQuote(argumentsValue)},
+      ${psQuote(description)},
+      ${psQuote(workingDirectory)},
+      ${psQuote(iconPath)}) | Out-Null
+  `;
+  await runShortcut(script);
+  return linkPath;
+}
+
 export async function createDesktopShortcut(targetPath, linkName, desktopDirOverride = null, options = {}) {
   const desktopDir = desktopDirOverride || paths().desktopDir;
   const { iconPath = null, description = "", workingDir = null, legacyFolderPath = null, shortcutArguments = "", legacyCmdPath = null, legacyShortcuts = [] } = options;
   await fs.mkdir(desktopDir, { recursive: true });
-  const linkPath = path.join(desktopDir, `${linkName}.lnk`);
+  const resolveExistingPath = async (value) => {
+    if (!value) return value;
+    try {
+      return await fs.realpath(value);
+    } catch {
+      return path.resolve(value);
+    }
+  };
+  const resolvedDesktopDir = await resolveExistingPath(desktopDir);
+  const resolvedTargetPath = await resolveExistingPath(targetPath);
+  const resolvedWorkingDir = await resolveExistingPath(workingDir);
+  const resolvedIconPath = await resolveExistingPath(iconPath);
+  const linkPath = path.join(resolvedDesktopDir, `${linkName}.lnk`);
   // 存在性检查：
   // - 同名 .lnk 指向本次目标 → 覆盖（幂等/升级）
   // - 同名 .lnk 是旧版指向"启动入口"文件夹（legacyFolderPath）→ 安全升级为直接入口
   // - 同名 .lnk 指向其他目标 → 不覆盖
   try {
     await fs.access(linkPath);
-    const readScript = `
-      $ws = New-Object -ComObject WScript.Shell
-      $sc = $ws.CreateShortcut('${linkPath.replace(/'/g, "''")}')
-      [PSCustomObject]@{ TargetPath = $sc.TargetPath; Arguments = $sc.Arguments } | ConvertTo-Json -Compress
-    `;
-    const existing = parsePowerShellJson(await runPowerShell(readScript, { timeout: 5_000 }));
+    const existing = await readDesktopShortcut(linkPath);
     const existingTarget = String(existing?.TargetPath || "").trim();
     const existingArguments = String(existing?.Arguments || "").trim();
     if (!existingTarget) {
@@ -435,7 +476,7 @@ export async function createDesktopShortcut(targetPath, linkName, desktopDirOver
     const samePath = (a, b) => path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase();
     const existingFile = fileArgument(existingArguments);
     const requestedFile = fileArgument(shortcutArguments);
-    const isCurrentShortcut = samePath(existingTarget, targetPath)
+    const isCurrentShortcut = samePath(existingTarget, resolvedTargetPath)
       && (requestedFile
         ? existingFile && samePath(existingFile, requestedFile)
         : existingArguments === String(shortcutArguments || "").trim());
@@ -451,17 +492,14 @@ export async function createDesktopShortcut(targetPath, linkName, desktopDirOver
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
   }
-  const script = `
-    $ws = New-Object -ComObject WScript.Shell
-    $shortcut = $ws.CreateShortcut('${linkPath.replace(/'/g, "''")}')
-    $shortcut.TargetPath = '${targetPath.replace(/'/g, "''")}'
-    if ('${(shortcutArguments || "").replace(/'/g, "''")}') { $shortcut.Arguments = '${(shortcutArguments || "").replace(/'/g, "''")}' }
-    $shortcut.Description = '${(description || "").replace(/'/g, "''")}'
-    if ('${(workingDir || "").replace(/'/g, "''")}') { $shortcut.WorkingDirectory = '${(workingDir || "").replace(/'/g, "''")}' }
-    if ('${(iconPath || "").replace(/'/g, "''")}') { $shortcut.IconLocation = '${(iconPath || "").replace(/'/g, "''")},0' }
-    $shortcut.Save()
-  `;
-  await runPowerShell(script, { timeout: 5_000 });
+  await writeDesktopShortcut({
+    linkPath,
+    targetPath: resolvedTargetPath,
+    arguments: shortcutArguments || "",
+    description: description || "",
+    workingDirectory: resolvedWorkingDir || "",
+    iconPath: resolvedIconPath || "",
+  });
   return linkPath;
 }
 
