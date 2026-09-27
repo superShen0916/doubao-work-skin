@@ -36,7 +36,7 @@
 - **不要 `--force`**：与 macOS 一样，当前任务里的 Agent 不应执行 `start --force`、退出应用或终止进程，否则可能中断自己和用户任务。需要重启时，把步骤交给用户：保存工作、等待当前任务结束，再由用户双击桌面入口。
 - **桌面入口**：推荐用户双击桌面 **「豆包工作皮肤」`.lnk`**。双击本身即表示用户授权本次换肤重启；快捷方式由系统 `wscript.exe` 无窗口托管 PowerShell 启动器，直接执行一次 `start --force`，成功后尝试把新豆包工作主窗口切到前台。全程无黑框、无 `y` 确认，并用命名 Mutex 防止重复双击。失败时弹窗并保留 `%LOCALAPPDATA%\DoubaoWorkSkin\launcher.log`。控制台排查才使用 `启动豆包工作.cmd`。**恢复官方外观**使用 `启动入口\恢复官方外观.cmd`，等价于固定入口的 `skin disable`。
 - **启动定位**：Windows 版定位 `%LOCALAPPDATA%\DoubaoWork\Application\app\DoubaoWork.exe` 等候选路径；Store 版有激活分支但未真机验收。报告问题时附带 `%LOCALAPPDATA%\DoubaoWorkSkin\launcher.log` 与 `status` 输出，不要读取对话内容或 Cookie。
-- **升级**：安装器在替换 `engine\` 前会检查是否有旧换肤 `node.exe` 占用，最多等 5 秒；仍占用则报错并保留旧版本备份，不要让用户手删 `engine\` 目录。
+- **升级**：安装器替换 `engine\` 前最多约 5 秒等待旧换肤进程释放文件；最终以目录替换是否成功为准。失败会保留旧版本或报告备份位置，不要让用户手删 `engine\` 目录。
 
 ## 切换与验证
 
@@ -197,7 +197,7 @@ skins/<theme-id>/
 
 ## 恢复官方外观
 
-安装版执行固定入口的 `skin disable`，与桌面“恢复官方外观.command”一致：应用已退出时会停止残留后台进程；应用仍运行时尝试清理页面外观。源码版执行 `node skin.mjs stop`。只有命令成功才报告对应结果；应用已退出时说明“下次正常打开为官方外观”，不要称已验证当前页面。
+安装版执行固定入口的 `skin disable`，与桌面恢复入口一致：应用已退出时会停止残留后台进程；应用仍运行时尝试清理页面外观。macOS 桌面入口为“恢复官方外观.command”，Windows 为“恢复官方外观.cmd”。源码版执行 `node skin.mjs stop`。只有命令成功才报告对应结果；应用已退出时说明“下次正常打开为官方外观”，不要称已验证当前页面。
 
 CDP 不可用时，安装版可用 `skin stop --keep-appearance`，源码版可用 `node skin.mjs stop --keep-appearance` 停止后台进程，但这不代表当前页面外观已恢复。告知用户完全退出后正常打开应用即可清除临时皮肤，不要删除状态文件冒充恢复成功。
 

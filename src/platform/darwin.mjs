@@ -87,9 +87,9 @@ export async function inspectProcess(pid) {
   return { command: command.trim(), cwd: cwdLine ? cwdLine.slice(1) : null };
 }
 
-export async function listProcessesByName(exeNames) {
+export async function listProcessesByName(exeNames, { execFileImpl = execFileAsync } = {}) {
   // 先用 comm 获取进程名（不受路径空格影响），再获取完整命令行
-  const { stdout: commOut } = await execFileAsync("ps", ["-axo", "pid=,comm="], { encoding: "utf8", maxBuffer: 4 * 1024 * 1024 });
+  const { stdout: commOut } = await execFileImpl("ps", ["-axo", "pid=,comm="], { encoding: "utf8", maxBuffer: 4 * 1024 * 1024 });
   const namePatterns = exeNames.map((name) => {
     const base = name.replace(/\.exe$/i, "");
     const escaped = base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -100,15 +100,15 @@ export async function listProcessesByName(exeNames) {
     return match ? { pid: Number(match[1]), comm: match[2].trim() } : null;
   }).filter((entry) => {
     if (!entry) return false;
-    return namePatterns.some((re) => re.test(entry.comm));
-  }).map((e) => e.pid);
+    return namePatterns.some((re) => re.test(path.posix.basename(entry.comm)));
+  });
 
-  // 对匹配的 PID 获取完整命令行和可执行文件路径
+  // ps comm includes the executable path, including spaces; never split it on whitespace.
   const result = [];
-  for (const pid of matchingPids) {
+  for (const { pid, comm } of matchingPids) {
     try {
-      const { stdout } = await execFileAsync("ps", ["-p", String(pid), "-o", "command="], { encoding: "utf8" });
-      result.push({ pid, command: stdout.trim(), executablePath: null });
+      const { stdout } = await execFileImpl("ps", ["-p", String(pid), "-o", "command="], { encoding: "utf8" });
+      result.push({ pid, command: stdout.trim(), executablePath: path.posix.isAbsolute(comm) ? comm : null });
     } catch { /* 进程已退出 */ }
   }
   return result;

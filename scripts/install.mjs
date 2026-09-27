@@ -180,19 +180,19 @@ function powershellExe() {
 // M8：升级 rename 前检查是否还有进程占用 engine 目录（旧换肤 watch 的 node.exe）。
 // Windows 下文件被占用时 rename 会 EPERM；与其让 fs.rename 抛裸 EPERM，不如提前给出可操作的错误。
 // 查询失败不阻塞安装（交由后续 rename 报错）。仅 Windows 生效。
-async function isEngineInUse(enginePath) {
+export async function isEngineInUse(enginePath, { execImpl = exec } = {}) {
   if (!IS_WIN) return false;
   try {
     const escaped = enginePath.replace(/'/g, "''");
     const script = `
       $rows = Get-CimInstance Win32_Process | Where-Object {
-        ($_.ExecutablePath -like '*node.exe') -and
-        ($_.CommandLine -like '*${escaped}*') -and
+        ($_.ExecutablePath -like '*node.exe') -and $_.CommandLine -and
+        ($_.CommandLine.IndexOf('${escaped}', [StringComparison]::OrdinalIgnoreCase) -ge 0) -and
         ($_.CommandLine -match 'injector|watch|skin\\.mjs|installed-cli|skin\\.cmd')
       }
-      @($rows | Measure-Object).Count
+      @($rows).Count
     `;
-    const { stdout } = await exec(powershellExe(), ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script], { windowsHide: true, timeout: 10_000 });
+    const { stdout } = await execImpl(powershellExe(), ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script], { windowsHide: true, timeout: 2_000, encoding: "utf8" });
     return Number(String(stdout).trim()) > 0;
   } catch {
     return false;
@@ -206,9 +206,7 @@ async function waitForEngineFree(enginePath, { timeoutMs = 5_000 } = {}) {
     if (!await isEngineInUse(enginePath)) return;
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
-  if (await isEngineInUse(enginePath)) {
-    // 超时后继续，rename 真失败时会报 EPERM（不阻塞测试/短生命周期进程）
-  }
+  // Actual rename remains authoritative; don't add another ignored process query.
 }
 
 export function installTargets(platform, { shortcuts, engine, applicationsDir }) {

@@ -8,7 +8,6 @@
     "test": "node --test",
     "start": "node skin.mjs start",
     "launch": "node skin.mjs start --force",
-    "shortcut": "node scripts/install-shortcut.mjs",
     "stop": "node skin.mjs stop",
     "status": "node skin.mjs status",
     "verify": "node skin.mjs verify",

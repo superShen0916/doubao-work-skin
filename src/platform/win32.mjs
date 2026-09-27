@@ -5,16 +5,20 @@
  * - 应用定位三级策略：进程反查 → 桌面路径遍历 → Store 包探测
  * - 启动双轨制：桌面版直接 spawn；Store 版用 IApplicationActivationManager
  * - 启动后必须验证 CDP 端口（Store 应用可能吃掉调试参数）
- * - 端口/进程管理用 Get-NetTCPConnection + Get-CimInstance（结构化，替代 netstat/tasklist/wmic）
+ * - 端口查询用原生 netstat；进程元信息用 Get-CimInstance
  * - 数据目录用 %LOCALAPPDATA%（不漫游，因 engine 含 Node 二进制）
  */
 
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { execFile, execFileSync, spawn } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { promisify } from "node:util";
 
+import { silentLauncherScript, silentLauncherHostScript } from "./windows-launcher.mjs";
+export { silentLauncherScript, silentLauncherHostScript } from "./windows-launcher.mjs";
+
+import { spawnApp } from "./spawn-app.mjs";
 const execFileAsync = promisify(execFile);
 
 const POWERSHELL = "powershell.exe";
@@ -239,7 +243,7 @@ $mgr = New-Object AppActivator+ApplicationActivationManager
 $am = [AppActivator+IApplicationActivationManager]$mgr
 $launchArgs = "--remote-debugging-address=127.0.0.1 --remote-debugging-port=${numericPort}"
 $procId = [uint32]0
-$hr = $am.ActivateApplication("${install.appUserModelId}", $launchArgs, 0, [ref]$procId)
+$hr = $am.ActivateApplication('${String(install.appUserModelId).replaceAll("'", "''")}', $launchArgs, 0, [ref]$procId)
 if ($hr -ne 0) { throw "ActivateApplication failed: 0x$('{0:X8}' -f $hr)" }
 $procId
 `;
@@ -251,15 +255,7 @@ $procId
   } catch (error) {
     // 回退：直接启动 exe（可能因 ACL 限制失败）
     try {
-      const child = spawn(install.mainBinary, [
-        "--remote-debugging-address=127.0.0.1",
-        `--remote-debugging-port=${numericPort}`,
-      ], { detached: true, stdio: "ignore", windowsHide: true });
-      if (child.pid) {
-        child.unref();
-        return child.pid;
-      }
-      throw new Error("直接启动 Store exe 未返回 PID");
+      return await spawnApp(install.mainBinary, numericPort);
     } catch (fallbackError) {
       throw new Error(`Store 应用启动失败（COM 激活和直接启动均失败）：${error.message}；建议从官网下载桌面 EXE 版`, { cause: fallbackError });
     }
@@ -270,19 +266,7 @@ export async function launchApp(install, port, { logFd, errorFd } = {}) {
   if (install.type === "store") {
     return launchStoreApp(install, port);
   }
-  // 桌面版：直接 spawn
-  const child = spawn(install.mainBinary, [
-    "--remote-debugging-address=127.0.0.1",
-    `--remote-debugging-port=${port}`,
-  ], {
-    detached: true,
-    stdio: ["ignore", logFd || "ignore", errorFd || "ignore"],
-    env: process.env,
-    windowsHide: true,
-  });
-  if (!child?.pid) throw new Error("豆包工作进程未返回 PID");
-  child.unref?.();
-  return child.pid;
+  return spawnApp(install.mainBinary, port, { logFd, errorFd });
 }
 
 // ─── 端口与进程 ─────────────────────────────────────────
@@ -357,7 +341,7 @@ export async function listProcessesByName(exeNames) {
     const rows = Array.isArray(result) ? result : [result];
     return rows.map((r) => ({
       pid: Number(r.ProcessId),
-      command: r.CommandLine || r.ExecutablePath || "",
+      command: r.CommandLine || "",
       executablePath: r.ExecutablePath || null,
     }));
   } catch {
@@ -379,7 +363,10 @@ export async function isProcessAlive(pid, { killImpl = process.kill } = {}) {
   }
 }
 
-export async function terminateProcess(pid) {
+export async function terminateProcess(pid, { force = false, killImpl = process.kill } = {}) {
+  if (!Number.isInteger(Number(pid)) || Number(pid) <= 0) throw new Error("无效 PID");
+  // Only disposable, ownership-verified watch processes request immediate termination.
+  if (force) { killImpl(Number(pid)); return; }
   await execFileAsync("taskkill", ["/PID", String(pid)], { windowsHide: true, timeout: 5_000 });
 }
 
@@ -402,15 +389,6 @@ export function generateCliEntry(dataRoot, nodePath, bridgePath) {
   return `@echo off\r\nchcp 65001 >nul\r\nsetlocal\r\nset NODE_OPTIONS=\r\nset NODE_PATH=\r\nset "DWS_STATE_ROOT=${dataRoot}"\r\n"${nodePath}" "${bridgePath}" %*\r\n`;
 }
 
-export function silentLauncherScript(command, dataRoot) {
-  const root = String(dataRoot).replace(/'/g, "''");
-  const mutexBase = `DoubaoWorkSkin.Launcher.${String(dataRoot).replace(/[^a-zA-Z0-9]/g, "_")}`;
-  return `# 豆包工作皮肤无窗口启动逻辑；由 WScript 托管。\r\n$ErrorActionPreference = 'Stop'\r\n[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)\r\n$OutputEncoding = [Console]::OutputEncoding\r\n$dataRoot = '${root}'\r\n$node = Join-Path $dataRoot 'engine\\runtime\\node.exe'\r\n$bridge = Join-Path $dataRoot 'engine\\scripts\\installed-cli.mjs'\r\n$log = if ($env:DWS_LAUNCHER_LOG) { $env:DWS_LAUNCHER_LOG } else { Join-Path $dataRoot 'launcher.log' }\r\n$mutexName = if ($env:DWS_LAUNCHER_MUTEX) { $env:DWS_LAUNCHER_MUTEX } else { 'Local\\${mutexBase}' }\r\n$env:DWS_STATE_ROOT = $dataRoot\r\nfunction Write-Log($msg) {\r\n  $ts = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'\r\n  Add-Content -LiteralPath $log -Value ($ts + ' ' + $msg) -Encoding UTF8\r\n}\r\nfunction Invoke-Skin([string[]]$SkinArgs) {\r\n  $oldPreference = $ErrorActionPreference\r\n  $ErrorActionPreference = 'Continue'\r\n  try {\r\n    & $node $bridge @SkinArgs 2>&1 | ForEach-Object { Write-Log ([string]$_) }\r\n    return $LASTEXITCODE\r\n  } finally { $ErrorActionPreference = $oldPreference }\r\n}\r\nfunction Activate-DoubaoWork {\r\n  try {\r\n    $statePath = Join-Path $dataRoot 'state.json'\r\n    if (-not (Test-Path -LiteralPath $statePath)) { Write-Log '启动成功，但没有状态文件可用于激活窗口'; return }\r\n    $state = Get-Content -LiteralPath $statePath -Raw -Encoding UTF8 | ConvertFrom-Json\r\n    $appPid = [int]$state.doubaoWorkPid\r\n    if ($appPid -le 0) { Write-Log '启动成功，但状态中没有主进程 PID'; return }\r\n    $shell = New-Object -ComObject WScript.Shell\r\n    for ($attempt = 0; $attempt -lt 15; $attempt++) {\r\n      if ($shell.AppActivate($appPid)) { Write-Log ("已激活豆包工作 PID " + $appPid); return }\r\n      Start-Sleep -Milliseconds 200\r\n    }\r\n    Write-Log ("换肤成功，但未能自动激活豆包工作 PID " + $appPid)\r\n  } catch { Write-Log ("换肤成功，但激活窗口失败：" + $_.Exception.Message) }\r\n}\r\n$mutex = New-Object System.Threading.Mutex($false, $mutexName)\r\n$acquired = $false\r\ntry {\r\n  try { $acquired = $mutex.WaitOne(0) } catch [System.Threading.AbandonedMutexException] { $acquired = $true }\r\n  if (-not $acquired) { Write-Log '已有启动器在运行，静默退出'; exit 0 }\r\n  Write-Log '桌面入口：直接 start --force'\r\n  $code = Invoke-Skin @('start', '--force')\r\n  Write-Log (\"force exit=\" + $code)\r\n  if ($code -eq 0) { Activate-DoubaoWork }\r\n  if ($code -ne 0) {\r\n    Write-Log (\"失败 code=\" + $code)\r\n    if (-not $env:DWS_LAUNCHER_NO_UI) {\r\n      Add-Type -AssemblyName System.Windows.Forms\r\n      $msg = '豆包工作皮肤启动失败（错误码 ' + $code + '）。' + [Environment]::NewLine + '日志：' + $log\r\n      [System.Windows.Forms.MessageBox]::Show($msg, '豆包工作皮肤', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null\r\n    }\r\n  }\r\n  exit $code\r\n} catch {\r\n  Write-Log (\"启动器异常：\" + $_.Exception.Message)\r\n  if (-not $env:DWS_LAUNCHER_NO_UI) {\r\n    Add-Type -AssemblyName System.Windows.Forms\r\n    [System.Windows.Forms.MessageBox]::Show(('豆包工作皮肤启动失败。' + [Environment]::NewLine + '日志：' + $log), '豆包工作皮肤', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null\r\n  }\r\n  exit 1\r\n} finally {\r\n  if ($acquired) { try { $mutex.ReleaseMutex() } catch {} }\r\n  $mutex.Dispose()\r\n}\r\n`;
-}
-
-export function silentLauncherHostScript() {
-  return `Option Explicit\r\nDim shell, ps1, powershell, command\r\nIf WScript.Arguments.Count <> 1 Then WScript.Quit 64\r\nSet shell = CreateObject(\"WScript.Shell\")\r\nps1 = WScript.Arguments(0)\r\npowershell = shell.ExpandEnvironmentStrings(\"%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\")\r\ncommand = Chr(34) & powershell & Chr(34) & \" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \" & Chr(34) & ps1 & Chr(34)\r\nshell.Run command, 0, False\r\n`;
-}
 export function launcherScripts(command, dataRoot) {
   const cmd = `call "${command}"`;
   const header = "@echo off\r\nchcp 65001 >nul\r\nsetlocal\r\nset NODE_OPTIONS=\r\nset NODE_PATH=\r\n";

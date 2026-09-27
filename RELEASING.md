@@ -4,7 +4,7 @@
 
 ## 生成用户下载包
 
-维护者打包需要 macOS、Node.js ≥ 22 和 Python 3（仅用于生成兼容 UTF-8 中文文件名的 ZIP；普通用户安装无需 Python）：
+维护者打包需要 macOS 或 Windows、Node.js ≥ 22 和 Python 3（仅用于生成兼容 UTF-8 中文文件名的 ZIP；普通用户安装无需 Python）：
 
 ```sh
 npm run check
@@ -31,7 +31,7 @@ GitHub Actions 的 **Build script package** 可手动生成三种下载包供检
 1. 完成本次变更所需的验收，将 `package.json` 更新为新的版本号，并新增 `docs/releases/v<版本>.md`，记录变更、老用户更新方式和实际验收范围。已有验收结果可以沿用，不将自动化检查写成未执行过的客户端验收。
 2. 提交并推送到 `main`，确认 CI 通过。
 3. 在该提交上创建 `v<版本>` tag 并推送，例如 `git tag -a v2.2.2 -m 'Release v2.2.2'`、`git push origin v2.2.2`。普通分支 push 只跑 CI，不会发版。
-4. **Release** 工作流验证 tag 与包版本一致、发布说明存在，分别使用 Node.js 22 / 24 运行检查与测试，然后构建三种 ZIP 并校验完整文件清单、源码一致性、执行权限、CRC 和 SHA-256。
+4. **Release** 工作流验证 tag 与包版本一致、发布说明存在，在 macOS 与 Windows 上分别使用 Node.js 22 / 24 运行检查与测试；随后构建三种 ZIP，并校验完整文件清单、源码一致性、执行权限、CRC 和 SHA-256。
 5. 工作流先创建草稿并上传六个附件，重新下载校验成功后才将 Release 公开并标记为最新版本。完成后确认 Release 页面及 Actions 结果。
 
 上传或校验失败会保留草稿，可在 Actions 中重跑失败任务。已公开版本不会被覆盖；如需修改，使用新的版本号和 tag。工作流使用仓库自带的 `GITHUB_TOKEN`，仅发布任务申请 `contents: write`，无需额外保存个人令牌。
@@ -39,8 +39,18 @@ GitHub Actions 的 **Build script package** 可手动生成三种下载包供检
 发布前在 `dist/` 目录验证校验和：
 
 ```sh
+# macOS/Linux
 shasum -a 256 -c ./*.zip.sha256
+
+# Windows PowerShell
+Get-ChildItem ./*.zip | ForEach-Object {
+  $actual = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+  $expected = (Get-Content "$($_.FullName).sha256" -TotalCount 1).Split()[0].ToLower()
+  if ($actual -ne $expected) { throw $_.Name }
+}
 ```
+
+日常验收可直接运行 `npm run verify:release`。
 
 完成下文中适用于本次变更的验收后，按上述 tag 流程发布。README 使用最新正式版入口，不需要每次修改版本下载链接。发布说明记录 macOS 与豆包工作测试版本、已验证的平台和已知限制；Release 的 tag 对应本次源码提交。未完成客户端验证的能力保留实验性标注。
 
@@ -49,7 +59,8 @@ shasum -a 256 -c ./*.zip.sha256
 ## 分发方式
 
 - 仓库链接：用户将链接提供给本机 Agent，按 `AGENTS.md` 完成下载与安装；没有脚本发布包时可使用完整源码 ZIP。对话安装需通过下文的客户端验收。
-- 脚本 ZIP：用户完整解压后双击 `安装皮肤.command`，再使用桌面的启动入口。首次联网下载约 52 MB 的专用 Node.js，后续校验后复用缓存。
+- macOS：解压后双击 `安装皮肤.command`，再使用启动台「豆包换肤」App 或桌面启动入口；首次联网下载约 52 MB 运行时。
+- Windows：解压后双击 `安装皮肤.cmd`，再双击桌面「豆包工作皮肤」快捷方式；首次联网下载约 30 MB x64 运行时。
 - Skill ZIP：供支持本地技能导入的客户端使用，导入与触发需独立验证。
 
 用户使用步骤统一维护在 README，Agent 执行流程维护在 AGENTS.md。需要重启宿主应用时，应保存工作并等待当前 Agent 任务结束，再由用户执行桌面启动入口。
@@ -58,7 +69,10 @@ macOS 或公司管理策略可能限制脚本运行。安装脚本不应关闭�
 
 ## 数据与更新
 
-程序与个人数据位于 `~/Library/Application Support/DoubaoWorkSkin/`：
+程序与个人数据按平台位于：
+
+- macOS：`~/Library/Application Support/DoubaoWorkSkin/`
+- Windows：`%LOCALAPPDATA%\DoubaoWorkSkin\`
 
 - `engine/`：程序和专用 Node.js，升级时替换。
 - `skins/`：个人皮肤，已有目录始终保留，新内置主题只补入不存在的目录。
@@ -67,7 +81,7 @@ macOS 或公司管理策略可能限制脚本运行。安装脚本不应关闭�
 - `skin` 和 `AGENTS.md`：Agent 的固定操作入口与说明。
 - `downloads/`：经过 SHA-256 校验的运行环境缓存。
 
-启动 App 单独位于 `~/Applications/豆包换肤.app`，安装时自动创建，可拖到 Dock。
+macOS 启动 App 单独位于 `~/Applications/豆包换肤.app`，安装时自动创建，可拖到 Dock。Windows 桌面入口为「豆包工作皮肤」`.lnk`，指向数据目录 `启动入口` 下的 WScript/VBS 无窗口链路。
 
 更新时重新运行新版安装脚本。安装先准备并检查候选版本，再停止旧版本所属 watch，替换程序；不自动退出豆包工作。更新成功后重新执行 `start` / `verify`，或使用桌面启动入口恢复后台注入。已有主题目录不会被覆盖。从 v2.2.2 起，加载器在内存中兼容旧主题的状态条和菜单规则，使本次修复也适用于已安装的主题副本；背景、配色和 CSS 文件原样保留，其他主题设计改动不会因此自动同步。GitHub 发版不等于自动更新本机安装。
 
@@ -80,8 +94,8 @@ macOS 或公司管理策略可能限制脚本运行。安装脚本不应关闭�
 | 范围 | 验收内容 |
 | --- | --- |
 | 源码与打包 | `npm run check`、`npm test`、`npm run verify:release`、tag 与版本一致、发布附件回下载校验 |
-| 安装 | Apple 芯片与 Intel 分别测试无系统 Node.js/Git 的环境；下载失败、校验失败、桌面同名文件 |
-| 启动与恢复 | 首次启用、取消重启、注入验证、切换、恢复、正常重开后的提示、App 启动器双击打开、App 智能判断、App 激活窗口、App 失败提示 |
+| 安装 | macOS Apple 芯片/Intel 与 Windows 10/11 x64 分别测试无系统 Node.js/Git 的环境；下载失败、校验失败、桌面同名文件 |
+| Windows 启动与恢复 | 首次启用、无黑框、注入验证、切换、恢复、正常重开提示、桌面 `.lnk` 双击、隐藏/最小化窗口恢复、失败提示 |
 | 更新 | 保留自定义主题、已修改的内置主题及偏好；更新后重新启动注入；失败时保留旧程序 |
 | 对话安装 | 仅提供仓库链接和换肤需求；Agent 下载、安装并给出重启步骤；返回对话后完成目标主题验证 |
 | 后续对话 | 已安装时复用工具、图片定制、恢复外观、新对话通过固定指南找到工具 |

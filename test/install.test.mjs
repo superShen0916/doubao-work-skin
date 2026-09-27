@@ -38,6 +38,7 @@ async function fixture(fn) {
     const desktopDir = path.join(temp, "Desktop");
     for (const directory of ["src", "skins/sample", "scripts"]) await fs.mkdir(path.join(projectRoot, directory), { recursive: true });
     for (const name of ["skin.mjs", "AGENTS.md", "CONTRIBUTING.md", "README.md", "LICENSE", "package.json"]) await fs.writeFile(path.join(projectRoot, name), "fixture");
+    await fs.writeFile(path.join(projectRoot, "package.json"), '{"version":"2.2.5","type":"module"}');
     await fs.writeFile(path.join(projectRoot, "src/runtime.mjs"), "export async function stopWatchProcess() {}\n");
     await fs.writeFile(path.join(projectRoot, "scripts/installed-cli.mjs"), "// fixture\n");
     await fs.writeFile(path.join(projectRoot, "skins/sample/theme.json"), "original");
@@ -45,7 +46,8 @@ async function fixture(fn) {
     await fs.writeFile(path.join(runtimeDir, "bin/node"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
     await fs.writeFile(path.join(runtimeDir, "node.exe"), "@echo off\r\nexit 0\r\n");
     await fs.writeFile(path.join(runtimeDir, "LICENSE"), "runtime license");
-    await fn({ projectRoot, runtimeDir, dataRoot, desktopDir, validate: async () => {} });
+    const applicationsDir = path.join(temp, "Applications");
+    await fn({ projectRoot, runtimeDir, dataRoot, desktopDir, applicationsDir, validate: async () => {} });
   } finally { await fs.rm(temp, { recursive: true, force: true }); }
 }
 
@@ -60,7 +62,7 @@ test("脚本安装升级程序但保留个人皮肤、偏好和固定桌面入�
     assert.equal(await fs.readFile(path.join(first.skinsDir, "sample/theme.json"), "utf8"), "my changes");
     assert.equal(await fs.readFile(path.join(options.dataRoot, "preferences.json"), "utf8"), '{"lastTheme":"sample"}');
     if (process.platform === "darwin") {
-      assert.equal(await fs.readlink(path.join(options.desktopDir, "豆包工作皮肤")), first.shortcuts);
+      assert.equal(await fs.readlink(path.join(options.desktopDir, "豆包换肤")), first.shortcuts);
       assert.equal((await fs.stat(path.join(first.shortcuts, "启动豆包工作.command"))).mode & 0o777, 0o700);
     } else if (process.platform === "win32") {
       assert.ok(await fs.stat(path.join(first.shortcuts, "启动豆包工作.cmd")));
@@ -121,7 +123,7 @@ test("旧安装升级后兼容个人 CSS，保留背景、配色、专属样式�
 test("桌面存在同名文件时保留原文件；未知引擎目录不覆盖", async () => {
   await fixture(async options => {
     await fs.mkdir(options.desktopDir);
-    const existing = path.join(options.desktopDir, "豆包工作皮肤");
+    const existing = path.join(options.desktopDir, "豆包换肤");
     await fs.writeFile(existing, "personal file");
     await install(options);
     assert.equal(await fs.readFile(existing, "utf8"), "personal file");
@@ -205,8 +207,7 @@ test("launcherScripts：darwin 产物为 .command 三件套，不含 .cmd", () =
 // 以下为 v2.2.5 合入的 macOS Launcher 用例：仅在 darwin 执行，
 // 其他平台（如 Windows）直接跳过，避免运行 zsh/osascript 或构造 .app bundle。
 
-test("安装时创建启动 App，包含智能启动脚本和图标", async () => {
-  if (process.platform !== "darwin") return;
+test("安装时创建启动 App，包含智能启动脚本和图标", { skip: process.platform !== "darwin" }, async () => {
   await fixture(async options => {
     const applicationsDir = path.join(options.dataRoot, "..", "Applications");
     // 准备有效 package.json 和图标资源
@@ -234,8 +235,7 @@ test("安装时创建启动 App，包含智能启动脚本和图标", async () =
   });
 });
 
-test("已存在本项目创建的 App 时覆盖重建", async () => {
-  if (process.platform !== "darwin") return;
+test("已存在本项目创建的 App 时覆盖重建", { skip: process.platform !== "darwin" }, async () => {
   await fixture(async options => {
     const applicationsDir = path.join(options.dataRoot, "..", "Applications");
     await fs.writeFile(path.join(options.projectRoot, "package.json"), '{"version":"2.2.2","type":"module"}');
@@ -256,8 +256,7 @@ test("已存在本项目创建的 App 时覆盖重建", async () => {
   });
 });
 
-test("已存在非本项目的同名 App 时跳过不覆盖", async () => {
-  if (process.platform !== "darwin") return;
+test("已存在非本项目的同名 App 时跳过不覆盖", { skip: process.platform !== "darwin" }, async () => {
   await fixture(async options => {
     const applicationsDir = path.join(options.dataRoot, "..", "Applications");
     await fs.writeFile(path.join(options.projectRoot, "package.json"), '{"version":"2.2.2","type":"module"}');
@@ -275,8 +274,7 @@ test("已存在非本项目的同名 App 时跳过不覆盖", async () => {
   });
 });
 
-test("assets/AppIcon.icns 不存在时 App 仍创建但无图标", async () => {
-  if (process.platform !== "darwin") return;
+test("assets/AppIcon.icns 不存在时 App 仍创建但无图标", { skip: process.platform !== "darwin" }, async () => {
   await fixture(async options => {
     const applicationsDir = path.join(options.dataRoot, "..", "Applications");
     await fs.writeFile(path.join(options.projectRoot, "package.json"), '{"version":"2.2.2","type":"module"}');
@@ -290,8 +288,7 @@ test("assets/AppIcon.icns 不存在时 App 仍创建但无图标", async () => {
   });
 });
 
-test("launcherApp 未传 version 时回退到 1.0.0", async () => {
-  if (process.platform !== "darwin") return;
+test("launcherApp 未传 version 时回退到 1.0.0", { skip: process.platform !== "darwin" }, async () => {
   await fixture(async options => {
     const applicationsDir = path.join(options.dataRoot, "..", "Applications");
     // package.json 内容是 "fixture"（无效 JSON），但 App 创建被 try/catch 包裹
@@ -301,8 +298,7 @@ test("launcherApp 未传 version 时回退到 1.0.0", async () => {
   });
 });
 
-test("launcherApp 生成的启动脚本通过 zsh 语法检查", async () => {
-  if (process.platform !== "darwin") return;
+test("launcherApp 生成的启动脚本通过 zsh 语法检查", { skip: process.platform !== "darwin" }, async () => {
   const app = launcherApp({ command: "/tmp/test skin/skin", version: "2.2.2" });
   const tmpScript = path.join(os.tmpdir(), `dws-launcher-syntax-${process.pid}.sh`);
   try {
@@ -359,14 +355,12 @@ esac
   return detailed ? { calls, exitCode } : calls;
 }
 
-test("Launcher 行为：应用未运行时调用 skin start 成功后激活窗口", async () => {
-  if (process.platform !== "darwin") return;
+test("Launcher 行为：应用未运行时调用 skin start 成功后激活窗口", { skip: process.platform !== "darwin" }, async () => {
   const calls = await runLauncherScenario({ pgrepExit: 1 });
   assert.deepEqual(calls, ["pgrep", "skin start", "open /Applications/DoubaoWork.app"]);
 });
 
-test("Launcher 行为：无皮肤但有 CDP 时调用 skin start 成功，不触发 --force", async () => {
-  if (process.platform !== "darwin") return;
+test("Launcher 行为：无皮肤但有 CDP 时调用 skin start 成功，不触发 --force", { skip: process.platform !== "darwin" }, async () => {
   const calls = await runLauncherScenario({
     pgrepExit: 0,
     statusOutput: '{"running": false,"port": 9342}',
@@ -375,8 +369,7 @@ test("Launcher 行为：无皮肤但有 CDP 时调用 skin start 成功，不触
   assert.deepEqual(calls, ["pgrep", "skin start", "open /Applications/DoubaoWork.app"]);
 });
 
-test("Launcher 行为：无皮肤且无 CDP 时调用 skin start --force", async () => {
-  if (process.platform !== "darwin") return;
+test("Launcher 行为：无皮肤且无 CDP 时调用 skin start --force", { skip: process.platform !== "darwin" }, async () => {
   const calls = await runLauncherScenario({
     pgrepExit: 0,
     statusOutput: '{"running": false,"port": null}',
@@ -386,8 +379,7 @@ test("Launcher 行为：无皮肤且无 CDP 时调用 skin start --force", async
   assert.deepEqual(calls, ["pgrep", "skin start", "skin start --force", "open /Applications/DoubaoWork.app"]);
 });
 
-test("Launcher 行为：已运行时一般启动错误也重试一次并激活窗口", async () => {
-  if (process.platform !== "darwin") return;
+test("Launcher 行为：已运行时一般启动错误也重试一次并激活窗口", { skip: process.platform !== "darwin" }, async () => {
   const result = await runLauncherScenario({ startExit: 1, detailed: true });
   assert.deepEqual(result, {
     calls: ["pgrep", "skin start", "skin start --force", "open /Applications/DoubaoWork.app"],
@@ -395,8 +387,7 @@ test("Launcher 行为：已运行时一般启动错误也重试一次并激活�
   });
 });
 
-test("Launcher 行为：重试失败时保留错误码并提示，不激活窗口或循环重试", async () => {
-  if (process.platform !== "darwin") return;
+test("Launcher 行为：重试失败时保留错误码并提示，不激活窗口或循环重试", { skip: process.platform !== "darwin" }, async () => {
   const result = await runLauncherScenario({ startExit: 1, startForceExit: 7, detailed: true });
   assert.deepEqual(result, {
     calls: ["pgrep", "skin start", "skin start --force", "dialog"],
@@ -404,8 +395,7 @@ test("Launcher 行为：重试失败时保留错误码并提示，不激活窗�
   });
 });
 
-test("Launcher 行为：应用未运行且启动失败时直接提示，不强制重试", async () => {
-  if (process.platform !== "darwin") return;
+test("Launcher 行为：应用未运行且启动失败时直接提示，不强制重试", { skip: process.platform !== "darwin" }, async () => {
   const result = await runLauncherScenario({ pgrepExit: 1, startExit: 1, detailed: true });
   assert.deepEqual(result, {
     calls: ["pgrep", "skin start", "dialog"],

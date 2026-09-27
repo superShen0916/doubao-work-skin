@@ -76,6 +76,13 @@ test("固定命令入口使用内置 Node，正确处理空格、引号和调用
       "start", "name with spaces", "$(touch never-run)",
     ]);
     assert.ok(agentPrompt(options.dataRoot).includes(path.join(options.dataRoot, "AGENTS.md")));
+    if (process.platform === "win32") {
+      assert.match(agentPrompt(options.dataRoot), /桌面「豆包工作皮肤」快捷方式/);
+      const guide = await fs.readFile(path.join(user.dataRoot, "AGENTS.md"), "utf8");
+      assert.match(guide, /桌面的「豆包工作皮肤」快捷方式（\.lnk）/);
+      assert.match(guide, /恢复官方外观\.cmd/);
+      assert.doesNotMatch(guide, /双击桌面"豆包工作皮肤"文件夹/);
+    }
   });
 });
 

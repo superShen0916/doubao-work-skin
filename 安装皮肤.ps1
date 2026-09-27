@@ -45,8 +45,8 @@ if (-not $doubaoInstalled) {
 # 进程反查兜底：从运行中的 DoubaoWork.exe 主进程定位
 if (-not $doubaoInstalled) {
     $runningExe = Get-CimInstance Win32_Process | Where-Object {
-        $_.Name -eq "DoubaoWork.exe" -and $_.ExecutablePath -and
-        $_.CommandLine -notmatch "helper|renderer|gpu-process|utility"
+        $_.Name -eq "DoubaoWork.exe" -and $_.ExecutablePath -and $_.CommandLine -and
+        $_.CommandLine -notmatch "(?:^|\s)--type="
     } | Select-Object -First 1
     if ($runningExe) { $doubaoInstalled = $true }
 }

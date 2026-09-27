@@ -16,6 +16,7 @@ import { execFileSync } from "node:child_process";
 
 // 直接导入 win32 实现，绕过 platform/index.mjs 的 process.platform 选择
 import * as win32 from "../../src/platform/win32.mjs";
+import { launcherMutexName } from "../../src/platform/windows-launcher.mjs";
 
 test("parseNetstatListeningPids：解析 IPv4/IPv6、去重并忽略其他端口", () => {
   const output = [
@@ -106,13 +107,13 @@ test("launcherScripts：生成五个启动脚本（含 VBS+PS1 静默链），�
     assert.ok(text.includes(`call "${command}"`), `${text} 应调用 command`);
   }
   const ps1 = scripts["启动豆包工作皮肤.ps1"];
-  assert.ok(ps1.includes("@('start', '--force')"));
+  assert.ok(ps1.includes("start --force"));
   assert.ok(ps1.includes("launcher.log"));
   assert.ok(ps1.includes("System.Threading.Mutex"));
   assert.ok(ps1.includes("WaitOne(0)"));
   assert.ok(ps1.includes("engine\\runtime\\node.exe"));
   assert.ok(ps1.includes("engine\\scripts\\installed-cli.mjs"));
-  assert.ok(ps1.includes("$ErrorActionPreference = 'Continue'"));
+  assert.ok(ps1.includes("$info.RedirectStandardError = $true"));
   const vbs = scripts["launcher.vbs"];
   assert.ok(vbs.includes("WScript.Arguments(0)"));
   assert.ok(vbs.includes("shell.Run command, 0, False"));
@@ -127,9 +128,9 @@ test("silentLauncherScript：生成内置 Node 直连逻辑，具体退出码行
   const ps1 = win32.silentLauncherScript("C:\\ignored\\skin.cmd", root);
   assert.ok(ps1.includes("engine\\runtime\\node.exe"));
   assert.ok(ps1.includes("engine\\scripts\\installed-cli.mjs"));
-  assert.ok(ps1.includes("@('start', '--force')"));
-  assert.ok(ps1.includes("$ErrorActionPreference = 'Continue'"));
-  assert.doesNotMatch(ps1, /skin\.cmd/);
+  assert.ok(ps1.includes("start --force"));
+  assert.ok(ps1.includes("$info.RedirectStandardError = $true"));
+  assert.match(ps1, /Remove-Item Env:NODE_OPTIONS, Env:NODE_PATH/);
 });
 
 test("paths：返回 dataRoot、defaultSkinsDir、desktopDir", () => {
@@ -248,8 +249,7 @@ test("pickMainProcessRow：命令行空/缺失时返回 null，不误判为主�
 });
 
 
-test("createDesktopShortcut：生成指向启动cmd的.lnk，含 WorkingDirectory/Description/IconLocation", async () => {
-  if (process.platform !== "win32") return;
+test("createDesktopShortcut：生成指向启动cmd的.lnk，含 WorkingDirectory/Description/IconLocation", { skip: process.platform !== "win32" }, async () => {
   const desktop = fs.mkdtempSync(path.join(os.tmpdir(), "dws-desk-"));
   try {
     const launcher = path.join(desktop, "启动豆包工作.cmd");
@@ -271,8 +271,7 @@ test("createDesktopShortcut：生成指向启动cmd的.lnk，含 WorkingDirector
   } finally { fs.rmSync(desktop, { recursive: true, force: true }); }
 });
 
-test("createDesktopShortcut：PowerShell 目标还需匹配 -File 参数才视为本项目入口", async () => {
-  if (process.platform !== "win32") return;
+test("createDesktopShortcut：PowerShell 目标还需匹配 -File 参数才视为本项目入口", { skip: process.platform !== "win32" }, async () => {
   const desktop = fs.mkdtempSync(path.join(os.tmpdir(), "dws-desk-args-"));
   try {
     const powershell = path.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
@@ -292,8 +291,7 @@ test("createDesktopShortcut：PowerShell 目标还需匹配 -File 参数才视�
   } finally { fs.rmSync(desktop, { recursive: true, force: true }); }
 });
 
-test("createDesktopShortcut：旧版指向文件夹的.lnk 可升级，指向其他目标不覆盖", async () => {
-  if (process.platform !== "win32") return;
+test("createDesktopShortcut：旧版指向文件夹的.lnk 可升级，指向其他目标不覆盖", { skip: process.platform !== "win32" }, async () => {
   const desktop = fs.mkdtempSync(path.join(os.tmpdir(), "dws-desk2-"));
   try {
     const folder = path.join(desktop, "启动入口");
@@ -331,8 +329,7 @@ test("paths：DWS_DESKTOP_DIR 覆盖 desktopDir（测试可旁路 Known Folder �
   }
 });
 
-test("paths：无 DWS_DESKTOP_DIR 时 desktopDir 走 Known Folder 且结果缓存", () => {
-  if (process.platform !== "win32") return;
+test("paths：无 DWS_DESKTOP_DIR 时 desktopDir 走 Known Folder 且结果缓存", { skip: process.platform !== "win32" }, () => {
   const original = process.env.DWS_DESKTOP_DIR;
   delete process.env.DWS_DESKTOP_DIR;
   win32._resetDesktopDirCacheForTest();
@@ -361,7 +358,7 @@ test("silentLauncherScript：dataRoot 插值进日志路径、内置 Node 路径
   assert.ok(ps1.includes("$dataRoot = 'C:\\Users\\tester\\AppData\\Local\\DoubaoWorkSkin'"));
   assert.ok(ps1.includes("Join-Path $dataRoot 'launcher.log'"));
   assert.ok(ps1.includes("Join-Path $dataRoot 'engine\\runtime\\node.exe'"));
-  assert.ok(ps1.includes("Local\\DoubaoWorkSkin.Launcher.C__Users_tester_AppData_Local_DoubaoWorkSkin"));
+  assert.ok(ps1.includes(launcherMutexName(root)));
 });
 
 test("launcherScripts：传入 dataRoot 时生成 VBS+PS1 链和自动 force 的控制台入口", () => {
@@ -375,8 +372,7 @@ test("launcherScripts：传入 dataRoot 时生成 VBS+PS1 链和自动 force 的
   assert.ok(cmd.includes("start --force"));
 });
 
-test("launcherScripts：不传 dataRoot 时使用平台 dataRoot，不依赖启动入口内的 skin.cmd", () => {
-  if (process.platform !== "win32") return;
+test("launcherScripts：不传 dataRoot 时使用平台 dataRoot，不依赖启动入口内的 skin.cmd", { skip: process.platform !== "win32" }, () => {
   const command = "C:\\Users\\tester\\AppData\\Local\\DoubaoWorkSkin\\skin.cmd";
   const scripts = win32.launcherScripts(command);
   const ps1 = scripts["启动豆包工作皮肤.ps1"];

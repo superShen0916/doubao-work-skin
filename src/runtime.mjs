@@ -194,9 +194,11 @@ function parseWatchCommand(command, { injectorPath, cwd }) {
   if (!/[\\/]node(\.exe)?$/i.test(executable)) return null;
   // 从原始字符串中提取参数值（能处理含空格的路径，macOS ps 输出不含引号）
   const rest = source.slice(injectorIndex + injectorToken.length);
-  const portMatch = rest.match(/--port\s+(\d+)/);
+  // A substring is not an entrypoint: injector.mjs.bak/evil must never be killed.
+  if (!/^(?:["']?\s|$)/.test(rest)) return null;
+  const portMatch = rest.match(/(?:^|\s)--port\s+(\d+)(?=\s|$)/);
   const skinMatch = rest.match(/--skin\s+(.+?)(?=\s+--(?:port|watch|timeout-ms)\b|$)/);
-  if (!rest.includes("--watch") || !portMatch || !skinMatch) return null;
+  if (!/(?:^|\s)--watch(?=\s|$)/.test(rest) || !portMatch || !skinMatch) return null;
   // 去除 skinDir 的首尾引号（Windows 风格）
   const skinDir = skinMatch[1].trim().replace(/^["']|["']$/g, "");
   return {
@@ -294,7 +296,7 @@ export async function stopWatchProcess({
   }
   for (const entry of candidates.values()) {
     if (signal) signal(entry.pid, "SIGTERM");
-    else await terminateProcess(entry.pid).catch(() => {});
+    else await terminateProcess(entry.pid, { force: process.platform === "win32" }).catch(() => {});
   }
   for (const entry of candidates.values()) {
     if (!await waitForExit(entry.pid)) {
@@ -406,7 +408,7 @@ export async function launchDoubaoWork({
     // （应用停止后进程反查为空，自定义路径也枚举不到）。未传则现场再发现一次。
     if (!install?.mainBinary) install = await discoverAppInstall().catch(() => null);
     if (!install) throw new Error("未找到豆包工作安装；可先正常打开一次应用让其记录位置");
-    return launchApp(install, port, { logFd: stdoutFd, errorFd: stderrFd });
+    return await launchApp(install, port, { logFd: stdoutFd, errorFd: stderrFd });
   } finally {
     fsSync.closeSync(stdoutFd);
     fsSync.closeSync(stderrFd);

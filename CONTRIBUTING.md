@@ -2,7 +2,7 @@
 
 本指南面向代码和内置主题贡献者。日常安装与使用见 [README](./README.md)，个人皮肤定制见 [Agent 操作指南](./AGENTS.md#创建与调整自定义皮肤)。
 
-开发需要完整源码仓库、macOS 和 Node.js ≥ 22，无需安装第三方运行依赖。脚本发布包和 Skill 包不包含完整测试与开发脚本。
+开发需要完整源码仓库、macOS 或 Windows 和 Node.js ≥ 22，无需安装第三方运行依赖。脚本发布包和 Skill 包不包含完整测试与开发脚本。
 
 ## 开发与验证
 
@@ -11,7 +11,11 @@ npm run check
 npm test
 ```
 
-以上命令可离线运行，不会启动、退出或修改豆包工作。CI 在 macOS 上分别使用 Node.js 22 和 24 执行检查；合成页面测试不能替代真实应用的视觉兼容性验证。
+以上命令不会启动、退出或修改豆包工作。CI 在 macOS 和 Windows 上分别使用 Node.js 22 和 24 执行检查；平台专属用例必须明确 `skip`，不能用空 `return` 冒充通过。部分 Windows 测试只读核对已存在的调试端口，绝不启动宿主。合成页面测试不能替代真实应用的视觉兼容性验证。
+
+Windows 启动逻辑按职责维护：`src/platform/win32.mjs` 提供系统能力，`windows-launcher.mjs` 只渲染入口，`windows-launcher.ps1` 承担互斥、进程调用和错误报告，`windows-window.cs` 只负责按 PID 恢复窗口。模板和 C# 源随 `src/` 一起打包，不在多个文件复制维护生成脚本。窗口置前是 best-effort：必须检查真实前台窗口，不绕过操作系统焦点策略。
+
+测试 Windows 桌面入口时仅使用临时目录和 fake CLI；测试进程终止时只结束用例创建的子进程。不得执行当前安装的桌面入口、`start --force` 或终止承载测试会话的豆包工作。
 
 样式回归测试使用本机 Chrome 和独立的临时 profile，覆盖所有内置主题的链接及文档卡片背景、输入框间距、键盘焦点、输入框装饰层、运行状态条及嵌套子菜单。可用 `DWS_TEST_BROWSER` 指定 Chromium 可执行文件；本地没有 Chrome 时明确跳过此项，CI 缺少浏览器时失败。设置 `DWS_TEST_ARTIFACTS=.build/css-browser` 可保留合成测试页和截图。
 
