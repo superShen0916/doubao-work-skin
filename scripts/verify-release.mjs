@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { execFileSync } from "node:child_process";
+import os from "node:os";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -27,7 +28,7 @@ export async function verifyRelease(args = []) {
   const python = (() => { for (const b of ["python3", "python"]) { try { execFileSync(b, ["--version"], { stdio: "ignore" }); return b; } catch {} } throw new Error("需要 python3 或 python"); })();
   execFileSync(python, ["-c", `
 from pathlib import Path
-import hashlib, sys, zipfile
+import hashlib, stat, sys, zipfile
 root, version = Path(sys.argv[1]), sys.argv[2]
 
 def bytes_for(p):
@@ -60,7 +61,7 @@ skill_expected = expected_map(common + skill_top)
 checks = [
     (f'DoubaoWorkSkin-{version}-macos-scripts.zip', '豆包换肤/', mac_expected, ['.command']),
     (f'DoubaoWorkSkin-{version}-windows-scripts.zip', '豆包换肤/', win_expected, []),
-    (f'doubao-work-skin-{version}-skill.zip', 'doubao-work-skin/assets/project/', skill_expected, []),
+    (f'doubao-work-skin-{version}-skill.zip', 'doubao-work-skin/assets/project/', skill_expected, ['.command']),
 ]
 for filename, prefix, expected, exec_exts in checks:
     archive = root / 'dist' / filename
@@ -78,10 +79,26 @@ for filename, prefix, expected, exec_exts in checks:
                 assert z.read(name) == content, f'{filename} 与源码不一致: {name}'
             else:
                 assert z.read(name), f'{filename} 空文件: {name}'
-            if any(name.endswith(e) for e in exec_exts):
-                assert (z.getinfo(name).external_attr >> 16) & 0o111, f'{filename} 缺少执行权限: {name}'
-    print(f'校验通过: {filename}（SHA-256、CRC、完整清单、源码一致性、执行权限）')
+            mode = z.getinfo(name).external_attr >> 16
+            assert stat.S_ISREG(mode), f'{filename} 不是 Unix 普通文件: {name} ({oct(mode)})'
+            expected_perm = 0o755 if any(name.endswith(e) for e in exec_exts) else 0o644
+            assert mode & 0o777 == expected_perm, f'{filename} 权限错误: {name} ({oct(mode & 0o777)})'
+    print(f'校验通过: {filename}（SHA-256、CRC、完整清单、源码一致性、文件类型与权限）')
 `, ROOT, version], { stdio: "inherit" });
+  if (process.platform === "darwin") {
+    const archive = path.join(ROOT, "dist", `DoubaoWorkSkin-${version}-macos-scripts.zip`);
+    const extracted = await fs.mkdtemp(path.join(os.tmpdir(), "dws-release-verify-"));
+    try {
+      execFileSync("/usr/bin/ditto", ["-x", "-k", archive, extracted]);
+      for (const name of ["安装皮肤.command", "启动豆包工作.command"]) {
+        const mode = (await fs.stat(path.join(extracted, "豆包换肤", name))).mode;
+        if (!(mode & 0o111)) throw new Error(`macOS 实际解压后缺少执行权限: ${name}`);
+      }
+      console.log("校验通过: macOS ditto 实际解压后两个 .command 均可执行");
+    } finally {
+      await fs.rm(extracted, { recursive: true, force: true });
+    }
+  }
 }
 
 if (process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url) {

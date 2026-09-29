@@ -27,14 +27,16 @@ jobs:
         with:
           package-manager-cache: false
           node-version: ${{ matrix.node }}
-      - run: node scripts/verify-release.mjs --tag-only "$GITHUB_REF_NAME"
+      - name: Validate release tag
+        shell: bash
+        run: node scripts/verify-release.mjs --tag-only "$GITHUB_REF_NAME"
       - run: npm run check
       - run: npm test
       - run: git diff --exit-code
 
   publish:
     needs: check
-    runs-on: windows-latest
+    runs-on: macos-latest
     timeout-minutes: 15
     permissions:
       contents: write
@@ -45,7 +47,9 @@ jobs:
           package-manager-cache: false
           node-version: 24
       - run: npm run build:release
-      - run: node scripts/verify-release.mjs --tag "$GITHUB_REF_NAME"
+      - name: Verify release packages
+        shell: bash
+        run: node scripts/verify-release.mjs --tag "$GITHUB_REF_NAME"
       - name: Upload and verify draft, then publish
         env:
           GH_TOKEN: ${{ github.token }}
@@ -71,7 +75,7 @@ jobs:
           gh release download "$tag" --dir "$download_dir" --clobber
           (
             cd "$download_dir"
-            sha256sum -c ./*.zip.sha256
+            shasum -a 256 -c ./*.zip.sha256
           )
           for file in "DoubaoWorkSkin-$version-macos-scripts.zip" "DoubaoWorkSkin-$version-windows-scripts.zip" "doubao-work-skin-$version-skill.zip"; do
             cmp "dist/$file.sha256" "$download_dir/$file.sha256"

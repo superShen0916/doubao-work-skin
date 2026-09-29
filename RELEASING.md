@@ -31,7 +31,7 @@ GitHub Actions 的 **Build script package** 可手动生成三种下载包供检
 1. 完成本次变更所需的验收，将 `package.json` 更新为新的版本号，并新增 `docs/releases/v<版本>.md`，记录变更、老用户更新方式和实际验收范围。已有验收结果可以沿用，不将自动化检查写成未执行过的客户端验收。
 2. 提交并推送到 `main`，确认 CI 通过。
 3. 在该提交上创建 `v<版本>` tag 并推送，例如 `git tag -a v2.2.2 -m 'Release v2.2.2'`、`git push origin v2.2.2`。普通分支 push 只跑 CI，不会发版。
-4. **Release** 工作流验证 tag 与包版本一致、发布说明存在，在 macOS 与 Windows 上分别使用 Node.js 22 / 24 运行检查与测试；随后构建三种 ZIP，并校验完整文件清单、源码一致性、执行权限、CRC 和 SHA-256。
+4. **Release** 工作流验证 tag 与包版本一致、发布说明存在，在 macOS 与 Windows 上分别使用 Node.js 22 / 24 运行检查与测试；随后在 macOS 发布任务中构建三种 ZIP，校验完整文件清单、源码一致性、Unix 文件类型与权限、CRC 和 SHA-256，并用系统 `ditto` 实际解压 macOS 包确认两个 `.command` 仍可执行。
 5. 工作流先创建草稿并上传六个附件，重新下载校验成功后才将 Release 公开并标记为最新版本。完成后确认 Release 页面及 Actions 结果。
 
 上传或校验失败会保留草稿，可在 Actions 中重跑失败任务。已公开版本不会被覆盖；如需修改，使用新的版本号和 tag。工作流使用仓库自带的 `GITHUB_TOKEN`，仅发布任务申请 `contents: write`，无需额外保存个人令牌。

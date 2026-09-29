@@ -20,19 +20,19 @@ function pythonBin() {
 
 function zipDirectory(directory, output) {
   execFileSync(pythonBin(), ["-c", `
-import pathlib, sys, zipfile, os
+import pathlib, sys, zipfile, stat
 root = pathlib.Path(sys.argv[1])
 with zipfile.ZipFile(sys.argv[2], 'w', zipfile.ZIP_DEFLATED) as archive:
     for file in sorted(root.rglob('*')):
         if file.is_file():
             arc = file.relative_to(root.parent).as_posix()
             info = zipfile.ZipInfo.from_file(file, arc)
+            executable = arc.endswith('.command') or arc.endswith('.sh')
+            # Windows 构建机没有可复用的 Unix mode；显式写入 Unix 普通文件类型和权限。
+            info.create_system = 3
+            info.external_attr = (stat.S_IFREG | (0o755 if executable else 0o644)) << 16
             with open(file, 'rb') as fh:
                 archive.writestr(info, fh.read(), zipfile.ZIP_DEFLATED)
-            if arc.endswith('.command') or arc.endswith('.sh'):
-                # 保留 Unix 执行位（Windows chmod 不写 ZIP external_attr）
-                zi = archive.getinfo(arc)
-                zi.external_attr = (0o755 & 0xFFFF) << 16
 `, directory, output]);
 }
 

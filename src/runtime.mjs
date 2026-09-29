@@ -190,8 +190,8 @@ function parseWatchCommand(command, { injectorPath, cwd }) {
   }
   // 去除可执行文件路径自身的首尾引号
   const executable = beforeInjector.trim().replace(/^["']|["']$/g, "");
-  // 用正则匹配 node/node.exe，不依赖 path.basename（跨平台行为不一致）
-  if (!/[\\/]node(\.exe)?$/i.test(executable)) return null;
+  // 既支持 PATH 解析得到的裸 node/node.exe，也支持带目录的绝对路径。
+  if (!/(?:^|[\\/])node(?:\.exe)?$/i.test(executable)) return null;
   // 从原始字符串中提取参数值（能处理含空格的路径，macOS ps 输出不含引号）
   const rest = source.slice(injectorIndex + injectorToken.length);
   // A substring is not an entrypoint: injector.mjs.bak/evil must never be killed.
