@@ -1,15 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import path from "node:path";
 import { findOwnedWatchProcesses, inspectWatchProcess } from "../src/runtime.mjs";
 
-const projectRoot = "/repo";
-const injectorPath = "/repo/src/injector.mjs";
+const projectRoot = path.resolve("watch-regression-fixture");
+const injectorPath = path.join(projectRoot, "src", "injector.mjs");
+const watchArgs = `${path.join("src", "injector.mjs")} --watch --port 9342 --skin "${path.join(projectRoot, "skins", "default")}"`;
 
 function processInfo(pid) {
-  if (pid === 1) return { command: "node src/injector.mjs --watch --port 9342 --skin /repo/skins/default", cwd: projectRoot };
-  if (pid === 2) return { command: "node.exe src/injector.mjs --watch --port 9342 --skin /repo/skins/default", cwd: projectRoot };
-  if (pid === 3) return { command: "/bin/sh -c node src/injector.mjs --watch --port 9342 --skin /repo/skins/default", cwd: projectRoot };
-  if (pid === 4) return { command: "not-node src/injector.mjs --watch --port 9342 --skin /repo/skins/default", cwd: projectRoot };
+  if (pid === 1) return { command: `node ${watchArgs}`, cwd: projectRoot };
+  if (pid === 2) return { command: `node.exe ${watchArgs}`, cwd: projectRoot };
+  if (pid === 3) return { command: `/bin/sh -c node ${watchArgs}`, cwd: projectRoot };
+  if (pid === 4) return { command: `not-node ${watchArgs}`, cwd: projectRoot };
   throw new Error("missing");
 }
 
