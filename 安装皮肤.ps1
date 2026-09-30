@@ -1,0 +1,116 @@
+﻿# 豆包工作皮肤 - Windows 安装脚本
+# 仅使用 Windows 自带工具（PowerShell），不依赖系统 Node.js、Git 或开发工具。
+
+$ErrorActionPreference = "Stop"
+$ProgressPreference = "SilentlyContinue"
+# 强制 TLS 1.2，避免旧系统默认 TLS 1.0/1.1 无法连接 nodejs.org
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+# M9：仅提供 x64 运行时，ARM64 直接报错退出（不下载错架构的 node 包）。
+if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") {
+    Write-Error "本工具暂不支持 ARM64 架构（仅提供 x64 运行时）。请在 x64 Windows 上运行。"
+    exit 1
+}
+
+$projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$localAppData = [Environment]::GetFolderPath("LocalApplicationData")
+$dataRoot = if ($env:DWS_STATE_ROOT) { $env:DWS_STATE_ROOT } else { Join-Path $localAppData "DoubaoWorkSkin" }
+$runtimeVersion = "24.21.0"
+$runtimeArch = "win-x64"
+$archiveName = "node-v${runtimeVersion}-${runtimeArch}.zip"
+$downloadsDir = Join-Path $dataRoot "downloads"
+$archivePath = Join-Path $downloadsDir $archiveName
+
+# 检查豆包工作是否安装
+$doubaoPaths = @(
+    (Join-Path $localAppData "Programs\DoubaoWork\DoubaoWork.exe"),
+    (Join-Path $localAppData "Programs\Doubao\DoubaoWork.exe"),
+    (Join-Path $localAppData "DoubaoWork\Application\app\DoubaoWork.exe"),
+    (Join-Path $env:ProgramFiles "DoubaoWork\DoubaoWork.exe"),
+    (Join-Path ${env:ProgramFiles(x86)} "DoubaoWork\DoubaoWork.exe")
+)
+$doubaoInstalled = $false
+foreach ($p in $doubaoPaths) {
+    if (Test-Path $p) { $doubaoInstalled = $true; break }
+}
+# 也检查 Store 版（M9：Get-AppxPackage 在精简版 Windows/受限环境可能不可用，容错跳过）
+if (-not $doubaoInstalled) {
+    try {
+        $storePkg = Get-AppxPackage | Where-Object { $_.Name -match "Doubao|春田" } | Select-Object -First 1
+        if ($storePkg) { $doubaoInstalled = $true }
+    } catch {
+        # Appx 子系统不可用，忽略，交给后续路径/进程探测
+    }
+}
+# 进程反查兜底：从运行中的 DoubaoWork.exe 主进程定位
+if (-not $doubaoInstalled) {
+    $runningExe = Get-CimInstance Win32_Process | Where-Object {
+        $_.Name -eq "DoubaoWork.exe" -and $_.ExecutablePath -and $_.CommandLine -and
+        $_.CommandLine -notmatch "(?:^|\s)--type="
+    } | Select-Object -First 1
+    if ($runningExe) { $doubaoInstalled = $true }
+}
+if (-not $doubaoInstalled) {
+    Write-Error "请先安装豆包工作，再双击此文件。"
+    exit 1
+}
+
+# 创建目录
+New-Item -ItemType Directory -Force -Path $downloadsDir | Out-Null
+
+$tempDir = Join-Path $downloadsDir ("install." + [System.Guid]::NewGuid().ToString("N").Substring(0, 8))
+New-Item -ItemType Directory -Force -Path $tempDir | Out-Null
+
+try {
+    # 下载 Node.js（如果缓存不存在）
+    if (-not (Test-Path $archivePath)) {
+        Write-Host "首次安装：正在下载专用运行环境（约 30 MB），不修改系统环境..."
+        $url = "https://nodejs.org/dist/v${runtimeVersion}/${archiveName}"
+        $tempArchive = Join-Path $tempDir "runtime.zip"
+        Invoke-WebRequest -Uri $url -OutFile $tempArchive -UseBasicParsing -TimeoutSec 600
+
+        # 从官方 SHASUMS256.txt 校验
+        $shaUrl = "https://nodejs.org/dist/v${runtimeVersion}/SHASUMS256.txt"
+        $shaText = (Invoke-WebRequest -Uri $shaUrl -UseBasicParsing -TimeoutSec 30).Content
+        $expectedSha = ($shaText -split "`n" | Where-Object { $_ -match [regex]::Escape($archiveName) } | ForEach-Object { ($_ -split "\s+")[0] })
+        if (-not $expectedSha) {
+            Write-Error "无法获取官方校验值，未运行下载内容。请重试。"
+            exit 1
+        }
+        $actualSha = (Get-FileHash $tempArchive -Algorithm SHA256).Hash.ToLower()
+        if ($actualSha -ne $expectedSha.ToLower()) {
+            Write-Error "下载校验失败，未运行下载内容。请重试。"
+            exit 1
+        }
+        Move-Item $tempArchive $archivePath
+    }
+
+    # 校验缓存
+    $shaUrl = "https://nodejs.org/dist/v${runtimeVersion}/SHASUMS256.txt"
+    $shaText = (Invoke-WebRequest -Uri $shaUrl -UseBasicParsing -TimeoutSec 30).Content
+    $expectedSha = ($shaText -split "`n" | Where-Object { $_ -match [regex]::Escape($archiveName) } | ForEach-Object { ($_ -split "\s+")[0] })
+    $actualSha = (Get-FileHash $archivePath -Algorithm SHA256).Hash.ToLower()
+    if ($actualSha -ne $expectedSha.ToLower()) {
+        Write-Error "缓存校验失败，未运行。请删除此文件后重试：$archivePath"
+        exit 1
+    }
+
+    # 解压（用 tar.exe 替代 Expand-Archive，避免 PS 5.1 的 MAX_PATH 260 字符限制）
+    $runtimeDir = Join-Path $tempDir "node-v${runtimeVersion}-${runtimeArch}"
+    tar.exe -xf $archivePath -C $tempDir
+    if (-not (Test-Path $runtimeDir)) {
+        Write-Error "解压失败，未找到运行时目录。请重试。"
+        exit 1
+    }
+
+    # 运行安装
+    $env:DWS_STATE_ROOT = $dataRoot
+    $nodeExe = Join-Path $runtimeDir "node.exe"
+    & $nodeExe (Join-Path $projectRoot "scripts\install.mjs") --runtime-dir $runtimeDir
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+    Write-Host ""
+    Write-Host "安装完成。请保存工作，等 Agent 当前任务结束，再双击桌面""豆包工作皮肤""快捷方式启动。"
+} finally {
+    Remove-Item -Recurse -Force $tempDir -ErrorAction SilentlyContinue
+}

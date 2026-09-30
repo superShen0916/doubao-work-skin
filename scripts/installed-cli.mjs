@@ -12,8 +12,11 @@ export async function main(args = process.argv.slice(2)) {
   const user = await prepareUserData({ projectRoot, dataRoot });
   process.env.DWS_STATE_ROOT = dataRoot;
   process.env.DWS_SKINS_DIR = user.skinsDir;
-  // 双击启动环境没有 Homebrew PATH；所有系统工具均来自 macOS。
-  process.env.PATH = "/usr/bin:/bin:/usr/sbin:/sbin";
+  // macOS 双击启动环境没有 Homebrew PATH；固定系统工具路径。
+  // Windows 保留系统 PATH，平台层依赖 powershell.exe、taskkill 等系统工具。
+  if (process.platform !== "win32") {
+    process.env.PATH = "/usr/bin:/bin:/usr/sbin:/sbin";
+  }
   const [command] = args;
   if (command === "prepare") return 0;
   if (command === "prompt") { console.log(agentPrompt(dataRoot)); return 0; }
@@ -47,7 +50,8 @@ if (process.argv[1] && (() => {
   catch { return false; }
 })()) {
   main().then(code => { process.exitCode = code || 0; }).catch(error => {
-    console.error(error.code === "ENOENT" ? `文件不存在，请确认已安装豆包工作或重新运行安装皮肤.command。\n${error.message}` : error.message);
+    const installScript = process.platform === "win32" ? "安装皮肤.cmd" : "安装皮肤.command";
+    console.error(error.code === "ENOENT" ? `文件不存在，请确认已安装豆包工作或重新运行${installScript}。\n${error.message}` : error.message);
     process.exitCode = error.exitCode || 1;
   });
 }

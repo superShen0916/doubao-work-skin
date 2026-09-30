@@ -30,6 +30,7 @@ function baseDeps(overrides = {}) {
     spawnWatchProcess: async () => 222,
     stopWatchProcess: async () => [],
     findDoubaoWorkPid: async () => 111,
+    discoverAppInstall: async () => ({ type: "desktop", mainBinary: path.resolve("/fake-app/DoubaoWork.exe") }),
     launchDoubaoWork: async () => 111,
     stopDoubaoWork: async () => {},
     selectAvailablePort: async (port) => port,
@@ -104,6 +105,77 @@ test("旧 watch 仍在时 start --force 可以重启应用并重新注入", asyn
   const cli = createCli(staleWatchDeps(events));
   await cli.start("default", { force: true });
   assert.deepEqual(events, ["stop-watch", "stop-app", "launch-app", "cdp-ready", "once", "spawn-watch", "verify", "write"]);
+});
+
+test("start --force 输出各阶段耗时与累计耗时", async () => {
+  const events = [];
+  const logs = [];
+  let clock = 0;
+  const cli = createCli(staleWatchDeps(events, {
+    now: () => { const current = clock; clock += 100; return current; },
+    log: (line) => logs.push(line),
+  }));
+  await cli.start("default", { force: true });
+  const timing = logs.filter((line) => line.startsWith("[timing]"));
+  assert.deepEqual(timing, [
+    "[timing] 读取配置与进程: 100ms（累计 100ms）",
+    "[timing] 探测现有 CDP: 100ms（累计 200ms）",
+    "[timing] 停止旧 watch: 100ms（累计 300ms）",
+    "[timing] 定位安装与端口: 100ms（累计 400ms）",
+    "[timing] 关闭旧豆包: 100ms（累计 500ms）",
+    "[timing] 发起新进程: 100ms（累计 600ms）",
+    "[timing] 等待 CDP 就绪: 100ms（累计 700ms）",
+    "[timing] 识别新主进程: 100ms（累计 800ms）",
+    "[timing] 首次注入: 100ms（累计 900ms）",
+    "[timing] 验证皮肤: 100ms（累计 1000ms）",
+    "[timing] 提交状态与偏好: 100ms（累计 1100ms）",
+  ]);
+});
+
+test("首次自定义安装路径：先定位再停止，将原 install 传给启动器", async () => {
+  const events = [];
+  let stopped = false;
+  const install = { type: "desktop", mainBinary: path.resolve("/自定义 应用/DoubaoWork.exe") };
+  const cli = createCli(staleWatchDeps(events, {
+    discoverAppInstall: async () => {
+      assert.equal(stopped, false, "不能等退出后才定位");
+      events.push("discover-install");
+      return install;
+    },
+    stopDoubaoWork: async () => { stopped = true; events.push("stop-app"); },
+    launchDoubaoWork: async (options) => {
+      assert.equal(stopped, true);
+      assert.strictEqual(options.install, install);
+      events.push("launch-app");
+      return 111;
+    },
+  }));
+  await cli.start("default", { force: true });
+  assert.deepEqual(events.slice(0, 4), ["stop-watch", "discover-install", "stop-app", "launch-app"]);
+});
+
+test("定位失败或端口耗尽：即使允许重启也不得先停止应用", async () => {
+  for (const overrides of [
+    { discoverAppInstall: async () => null },
+    { discoverAppInstall: async () => { throw new Error("定位不可用"); } },
+    { selectAvailablePort: async () => { throw new Error("端口耗尽"); } },
+  ]) {
+    const cli = createCli(baseDeps({
+      discoverCdpPort: async () => null,
+      stopDoubaoWork: async () => assert.fail("预检失败不得停止宿主"),
+      launchDoubaoWork: async () => assert.fail("预检失败不得启动宿主"),
+      ...overrides,
+    }));
+    await assert.rejects(cli.start("default", { force: true }), /安装位置|定位不可用|端口耗尽/);
+  }
+});
+
+test("CDP 可复用时不重新定位安装位置", async () => {
+  const cli = createCli(baseDeps({
+    discoverAppInstall: async () => assert.fail("复用CDP无需定位"),
+    stopDoubaoWork: async () => assert.fail("复用CDP不得停止宿主"),
+  }));
+  assert.equal(await cli.start("default"), 0);
 });
 
 test("应用已退出但旧 watch 仍在时 start 正常启动应用", async () => {

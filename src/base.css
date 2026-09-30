@@ -1,6 +1,5 @@
 /* Gothic Void Refined v3 — fully variable-driven with motion */
 
-/* === 0. Interactive elements — base colors === */
 /* 聊天内容区里的链接和文档卡片：加半透明强调色背景，和正文区分开 */
 
 /* 聊天记录里的链接（静态文本，加 padding 和圆角） */
@@ -169,7 +168,7 @@
 }
 [data-testid="message_action_bar"] button:hover {
   background: color-mix(in srgb, var(--dws-accent) 9%, transparent) !important;
-  color: color-mix(in srgb, var(--dws-accent) 80%, white 20%) !important;
+  color: var(--dws-accent) !important;
 }
 
 /* === 5. Markdown tables === */
@@ -403,7 +402,7 @@ body [data-testid="chat_input"] [data-testid="chat_input_send_button"] svg {
   fill: currentColor !important;
 }
 [data-testid="message_action_bar"] button:hover * {
-  color: color-mix(in srgb, var(--dws-accent) 80%, white 20%) !important;
+  color: var(--dws-accent) !important;
 }
 
 [data-testid="right-panel-container"],
@@ -442,7 +441,7 @@ body [data-testid="chat_input"] [data-testid="chat_input_send_button"] svg {
   border-radius: 10px !important;
 }
 [data-testid="flow_chat_guidance_page"] [class*="text-dbx-text-h"] {
-  color: color-mix(in srgb, var(--dws-accent) 80%, white 20%) !important;
+  color: var(--dws-accent) !important;
 }
 [data-testid="flow_chat_guidance_page"] [class*="line-clamp"]:hover {
   background: color-mix(in srgb, var(--dws-accent) 6%, transparent) !important;
@@ -714,7 +713,7 @@ div[class*="flex-col-reverse"][class*="input-guidance"] > *:not([data-testid="ch
 }
 [data-testid="samantha_layout_right_side"] section[class*="group"] > button:not([class*="groupCollapseButton"]):hover {
   background: color-mix(in srgb, var(--dws-accent) 10%, transparent) !important;
-  color: color-mix(in srgb, var(--dws-accent) 80%, white 20%) !important;
+  color: var(--dws-accent) !important;
 }
 
 /* 可点击文件/资源项 */

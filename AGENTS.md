@@ -1,6 +1,6 @@
 # Agent 操作指南
 
-本指南适用于在用户 Mac 上安装、切换、制作和恢复豆包换肤的 Agent。需要本机文件与命令执行权限；云端沙箱不能操作用户电脑上的应用。
+本指南适用于在用户 macOS 或 Windows 电脑上安装、切换、制作和恢复豆包工作皮肤。需要本机文件与命令执行权限；云端沙箱不能操作用户电脑上的应用。
 
 用户请求阅读、审查或修改本仓库时，只进行对应的开发工作，不安装工具、不切换皮肤。开发与测试规则见 [CONTRIBUTING.md](./CONTRIBUTING.md)。安装版的补充文档位于用户数据目录内的 `engine/`；该目录仅供读取，不在其中开发或制作个人皮肤。
 
@@ -26,6 +26,17 @@
 成功后优先阅读 `~/Library/Application Support/DoubaoWorkSkin/AGENTS.md` 并使用其中的固定命令入口，不再依赖下载目录。安装时会自动创建「豆包换肤」App（`~/Applications/豆包换肤.app`）。需要启用或重启时，让用户保存工作、等待当前任务结束，再打开该 App（推荐，无需确认）或双击桌面“豆包换肤”内的启动文件。不要替用户打开 App 或运行带重启确认的快捷入口。
 
 下文的 `node skin.mjs` 和 Node.js 环境检查仅适用于直接从源码运行；安装版使用已安装指南中的替代命令。
+
+## Windows 分支操作
+
+以下仅适用于 Windows（macOS 流程见上文）。命令行/路径按 Windows 习惯表述。
+
+- **安装入口**：解压后双击 **`安装皮肤.cmd`**（它调用同目录 `安装皮肤.ps1` 下载并校验专用 Node.js）。不要让用户手动执行 PowerShell 脚本；脚本本身会校验 SHA-256。
+- **固定命令入口与数据目录**：程序与个人皮肤位于 `%LOCALAPPDATA%\DoubaoWorkSkin\`（即 `dataRoot`）。Agent 操作优先使用该目录下的固定入口（`skin.cmd` / `skin`），与 macOS 的 `$HOME/Library/Application Support/DoubaoWorkSkin/skin` 对等。个人皮肤在 `%LOCALAPPDATA%\DoubaoWorkSkin\skins\`，升级不覆盖。
+- **不要 `--force`**：与 macOS 一样，当前任务里的 Agent 不应执行 `start --force`、退出应用或终止进程，否则可能中断自己和用户任务。需要重启时，把步骤交给用户：保存工作、等待当前任务结束，再由用户双击桌面入口。
+- **桌面入口**：推荐用户双击桌面 **「豆包工作皮肤」`.lnk`**。双击本身即表示用户授权本次换肤重启；快捷方式由系统 `wscript.exe` 无窗口托管 PowerShell 启动器，直接执行一次 `start --force`，成功后尝试把新豆包工作主窗口切到前台。全程无黑框、无 `y` 确认，并用命名 Mutex 防止重复双击。失败时弹窗并保留 `%LOCALAPPDATA%\DoubaoWorkSkin\launcher.log`。控制台排查才使用 `启动豆包工作.cmd`。**恢复官方外观**使用 `启动入口\恢复官方外观.cmd`，等价于固定入口的 `skin disable`。
+- **启动定位**：Windows 版定位 `%LOCALAPPDATA%\DoubaoWork\Application\app\DoubaoWork.exe` 等候选路径；Store 版有激活分支但未真机验收。报告问题时附带 `%LOCALAPPDATA%\DoubaoWorkSkin\launcher.log` 与 `status` 输出，不要读取对话内容或 Cookie。
+- **升级**：安装器替换 `engine\` 前最多约 5 秒等待旧换肤进程释放文件；最终以目录替换是否成功为准。失败会保留旧版本或报告备份位置，不要让用户手删 `engine\` 目录。
 
 ## 切换与验证
 
@@ -186,7 +197,7 @@ skins/<theme-id>/
 
 ## 恢复官方外观
 
-安装版执行固定入口的 `skin disable`，与桌面“恢复官方外观.command”一致：应用已退出时会停止残留后台进程；应用仍运行时尝试清理页面外观。源码版执行 `node skin.mjs stop`。只有命令成功才报告对应结果；应用已退出时说明“下次正常打开为官方外观”，不要称已验证当前页面。
+安装版执行固定入口的 `skin disable`，与桌面恢复入口一致：应用已退出时会停止残留后台进程；应用仍运行时尝试清理页面外观。macOS 桌面入口为“恢复官方外观.command”，Windows 为“恢复官方外观.cmd”。源码版执行 `node skin.mjs stop`。只有命令成功才报告对应结果；应用已退出时说明“下次正常打开为官方外观”，不要称已验证当前页面。
 
 CDP 不可用时，安装版可用 `skin stop --keep-appearance`，源码版可用 `node skin.mjs stop --keep-appearance` 停止后台进程，但这不代表当前页面外观已恢复。告知用户完全退出后正常打开应用即可清除临时皮肤，不要删除状态文件冒充恢复成功。
 

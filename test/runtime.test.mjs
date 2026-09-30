@@ -5,12 +5,14 @@ import os from "node:os";
 import path from "node:path";
 import {
   createRuntimePaths,
+  launchDoubaoWork,
   DOUBAOWORK_BROWSER_BINARY,
   discoverCdpPort,
   findDoubaoWorkBrowserPids,
   findOwnedWatchProcesses,
   inspectWatchProcess,
   normalizeRuntimeState,
+  pickMainDoubaoWorkPid,
   readRuntimeState,
   selectAvailablePort,
   stopWatchProcess,
@@ -58,7 +60,10 @@ test("清理运行状态保留上次选择，偏好文件采用私人权限", as
     await fs.writeFile(paths.state, "{}");
     await clearRuntimeState({ paths });
     assert.equal(await readPreferredTheme({ paths }), "my-garden");
-    assert.equal((await fs.stat(paths.preferences)).mode & 0o777, 0o600);
+    // Unix 权限位在 Windows ACL 模型下不暴露，仅在 Unix 平台断言（mac 行为不弱化）
+    if (process.platform !== "win32") {
+      assert.equal((await fs.stat(paths.preferences)).mode & 0o777, 0o600);
+    }
     await assert.rejects(rememberTheme("../outside", { paths }), /无效/);
     await fs.writeFile(paths.preferences, "bad json");
     assert.equal(await readPreferredTheme({ paths }), null);
@@ -82,7 +87,7 @@ test("原子状态写入使用 schema 1 和 0600 权限", async () => {
     const state = await readRuntimeState({ paths });
     const stat = await fs.stat(paths.state);
     assert.equal(state.schemaVersion, 1);
-    assert.equal(stat.mode & 0o777, 0o600);
+    if (process.platform !== "win32") assert.equal(stat.mode & 0o777, 0o600);
     assert.deepEqual((await fs.readdir(paths.root)).filter((name) => name.endsWith(".tmp")), []);
   });
 });
@@ -136,6 +141,24 @@ test("安装版 watch 能识别带空格的程序路径和个人皮肤路径", a
   assert.equal(entry.port, 9342);
 });
 
+test("Windows watch 能识别双引号包裹的含空格路径", async () => {
+  const projectRoot = "C:\\Users\\Test User\\AppData\\Local\\DoubaoWorkSkin\\engine";
+  const injectorPath = `${projectRoot}\\src\\injector.mjs`;
+  const skinDir = "C:\\Users\\Test User\\AppData\\Local\\DoubaoWorkSkin\\skins\\my-garden";
+  const nodePath = `${projectRoot}\\runtime\\node.exe`;
+  const entry = await inspectWatchProcess(9, {
+    projectRoot,
+    injectorPath,
+    inspectProcess: async () => ({
+      command: `"${nodePath}" "${injectorPath}" --watch --port 9342 --skin "${skinDir}"`,
+      cwd: projectRoot,
+    }),
+  });
+  assert.ok(entry, "应识别为 watch 进程");
+  assert.equal(entry.skinDir, skinDir);
+  assert.equal(entry.port, 9342);
+});
+
 test("端口选择跳过已占用端口", async () => {
   const occupied = new Set([9342, 9343]);
   assert.equal(await selectAvailablePort(9342, { isPortListening: async (port) => occupied.has(port) }), 9344);
@@ -175,6 +198,26 @@ test("重启前必须等待 shim 和旧浏览器全部退出", async () => {
   assert.deepEqual(events, [[9, "SIGTERM"], [9, "wait"], [10, "wait"]]);
 });
 
+test("多个浏览器退出等待并行启动", async () => {
+  const started = [];
+  const resolvers = new Map();
+  const stopping = stopDoubaoWork({
+    pid: 9,
+    findBrowserPids: async () => [10, 11],
+    signal: () => {},
+    waitForExit: async (pid) => {
+      started.push(pid);
+      if (pid === 9) return true;
+      return new Promise((resolve) => resolvers.set(pid, resolve));
+    },
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(started, [9, 10, 11]);
+  resolvers.get(10)(true);
+  resolvers.get(11)(true);
+  await stopping;
+});
+
 test("浏览器仍在退出时中止重启，不强杀浏览器或忽略单例锁", async () => {
   const signals = [];
   await assert.rejects(stopDoubaoWork({
@@ -184,4 +227,39 @@ test("浏览器仍在退出时中止重启，不强杀浏览器或忽略单例�
     waitForExit: async (pid) => pid === 9,
   }), /浏览器 PID 10 尚未退出/);
   assert.deepEqual(signals, [[9, "SIGTERM"]]);
+});
+
+test("pickMainDoubaoWorkPid：非空命令行且无 --type= 才是主进程，否则 null", () => {
+  const main = "C:\\Users\\Test User\\AppData\\Local\\DoubaoWork\\Application\\app\\DoubaoWork.exe";
+  const normalized = path.resolve(main).toLowerCase();
+  const rows = [
+    { pid: 101, executablePath: main, command: `"${main}" --type=renderer` },
+    { pid: 102, executablePath: main, command: `"${main}" --type=utility` },
+    { pid: 103, executablePath: main, command: `"${main}" --start_time=1789883576256` },
+    { pid: 104, executablePath: "C:\\other\\DoubaoWork.exe", command: `"C:\\other\\DoubaoWork.exe"` },
+  ];
+  assert.equal(pickMainDoubaoWorkPid(rows, normalized), 103);
+  assert.equal(pickMainDoubaoWorkPid([], normalized), null);
+  const childOnly = [{ pid: 101, executablePath: main, command: `"${main}" --type=renderer` }];
+  assert.equal(pickMainDoubaoWorkPid(childOnly, normalized), null);
+  assert.equal(pickMainDoubaoWorkPid([{ pid: 105, executablePath: main, command: "" }], normalized), null);
+  assert.equal(pickMainDoubaoWorkPid([{ pid: 106, executablePath: main }], normalized), null);
+});
+
+test("launchDoubaoWork：停止后传 install 仍按指定路径启动，不重新枚举", async () => {
+  await withTempRuntime(async (paths) => {
+    const fakeExe = path.join(paths.root, "DoubaoWork.exe");
+    await fs.writeFile(fakeExe, "x");
+    const install = { type: "desktop", mainBinary: fakeExe, helperBinary: fakeExe + "Browser.exe" };
+    let launched = null;
+    const pid = await launchDoubaoWork({
+      port: 9342,
+      paths,
+      spawnImpl: (binary, args) => { launched = { binary, args }; return { pid: 42, unref() {} }; },
+      install,
+    });
+    assert.equal(pid, 42);
+    assert.equal(launched.binary, fakeExe);
+    assert.match(launched.args.join(" "), /--remote-debugging-port=9342/);
+  });
 });

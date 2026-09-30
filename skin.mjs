@@ -25,6 +25,7 @@ import {
   waitForCdp,
   writeRuntimeState,
 } from "./src/runtime.mjs";
+import { discoverAppInstall } from "./src/platform/index.mjs";
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_PORT = 9342;
@@ -38,6 +39,7 @@ function usage() {
   node skin.mjs list
   node skin.mjs start [皮肤] [--port N] [--force]
   node skin.mjs stop [--keep-appearance]
+  node skin.mjs disable            # 同 stop，Windows 桌面"恢复官方外观.cmd"调用此名
   node skin.mjs switch <皮肤>
   node skin.mjs status
   node skin.mjs verify [皮肤]
@@ -55,7 +57,7 @@ export function parseCliArgs(argv) {
   const args = [...argv];
   if (args.length === 0) return { command: "list", skinName: null, port: null, force: false, keepAppearance: false };
   const first = args.shift();
-  const knownCommands = new Set(["list", "start", "stop", "switch", "status", "verify", "restore", "help", "--help", "-h"]);
+  const knownCommands = new Set(["list", "start", "stop", "disable", "switch", "status", "verify", "restore", "help", "--help", "-h"]);
   const parsed = {
     command: knownCommands.has(first) ? first : "switch",
     skinName: knownCommands.has(first) ? null : first,
@@ -85,7 +87,7 @@ export function parseCliArgs(argv) {
   if (parsed.command === "switch" && !parsed.skinName) throw new Error("switch 必须指定皮肤");
   if (!["start"].includes(parsed.command) && parsed.force) throw new Error(`命令 ${parsed.command} 不支持 --force`);
   if (!["start"].includes(parsed.command) && parsed.port != null && parsed.command !== "verify") throw new Error(`命令 ${parsed.command} 不支持 --port`);
-  if (parsed.keepAppearance && parsed.command !== "stop") throw new Error(`命令 ${parsed.command} 不支持 --keep-appearance`);
+  if (parsed.keepAppearance && !["stop", "disable"].includes(parsed.command)) throw new Error(`命令 ${parsed.command} 不支持 --keep-appearance`);
   return parsed;
 }
 
@@ -160,12 +162,14 @@ export function createCli(overrides = {}) {
     spawnWatchProcess,
     stopWatchProcess,
     findDoubaoWorkPid,
+    discoverAppInstall,
     launchDoubaoWork,
     stopDoubaoWork,
     selectAvailablePort,
     waitForCdp,
     runInjector,
     verifyWithRetry,
+    now: Date.now,
     log: console.log,
     error: console.error,
     ...overrides,
@@ -278,6 +282,13 @@ export function createCli(overrides = {}) {
   }
 
   async function start(name = null, { port = DEFAULT_PORT, force = false } = {}) {
+    const startedAt = deps.now();
+    let phaseAt = startedAt;
+    const mark = (label) => {
+      const current = deps.now();
+      deps.log(`[timing] ${label}: ${current - phaseAt}ms（累计 ${current - startedAt}ms）`);
+      phaseAt = current;
+    };
     const previousState = await deps.readRuntimeState();
     if (!name) {
       const preferred = await deps.readPreferredTheme() || previousState?.skinName;
@@ -288,37 +299,54 @@ export function createCli(overrides = {}) {
     const candidate = await loadNamedTheme(name);
     const existingWatch = previousState ? await deps.readWatchProcess({ state: previousState }) : null;
     let appPid = await deps.findDoubaoWorkPid();
+    mark("读取配置与进程");
     let selectedPort = port;
     let cdpReady = false;
     if (appPid) {
-      const discoveredPort = await deps.discoverCdpPort(previousState?.port || selectedPort);
+      const discoveredPort = await deps.discoverCdpPort(
+        previousState?.port || selectedPort,
+        force ? { maxOffset: 0, timeoutMs: 500 } : undefined,
+      );
       if (discoveredPort) {
         selectedPort = discoveredPort;
         cdpReady = true;
       }
+      mark("探测现有 CDP");
     }
     // watch 独立于应用存活；应用正常重开后可能已没有 CDP。
     if (existingWatch && cdpReady && existingWatch.port === selectedPort && previousState.port === selectedPort) {
       return switchTheme(name);
     }
     await deps.stopWatchProcess({ state: previousState });
-    if (appPid && !cdpReady) {
-      if (!force) throw Object.assign(new Error(`豆包工作正在运行但没有可用 CDP；正常重新打开应用不会保留调试参数。请先退出应用再执行 start，或保存工作后执行: node skin.mjs start ${name} --force`), { exitCode: EXIT_PRECONDITION });
-      await deps.stopDoubaoWork({ pid: appPid });
-      appPid = null;
-    }
+    mark("停止旧 watch");
+    // 只有需要启动时才定位；必须在停止应用前完成，失败时保留宿主。
+    let install = null;
     if (!cdpReady) {
+      if (appPid && !force) throw Object.assign(new Error(`豆包工作正在运行但没有可用 CDP；正常重新打开应用不会保留调试参数。请先退出应用再执行 start，或保存工作后执行: node skin.mjs start ${name} --force`), { exitCode: EXIT_PRECONDITION });
+      install = await deps.discoverAppInstall();
+      if (!install?.mainBinary) throw Object.assign(new Error("未找到可用于启动的豆包工作安装位置，未退出应用。请先正常打开豆包工作后重试。"), { exitCode: EXIT_PRECONDITION });
       selectedPort = await deps.selectAvailablePort(selectedPort);
-      await deps.launchDoubaoWork({ port: selectedPort });
+      mark("定位安装与端口");
+      if (appPid) {
+        await deps.stopDoubaoWork({ pid: appPid });
+        appPid = null;
+      }
+      mark("关闭旧豆包");
+      await deps.launchDoubaoWork({ port: selectedPort, install });
+      mark("发起新进程");
       await deps.waitForCdp(selectedPort);
+      mark("等待 CDP 就绪");
       appPid = await deps.findDoubaoWorkPid();
+      mark("识别新主进程");
     }
     let watchPid = null;
     try {
       const injected = await deps.runInjector("once", { port: selectedPort, skinDir: candidate.directoryPath, timeoutMs: 20_000 });
       if (!injected.ok) throw new Error(`首次注入失败:\n${formatFailure(injected)}`);
+      mark("首次注入");
       watchPid = await deps.spawnWatchProcess({ port: selectedPort, skinDir: candidate.directoryPath });
       await deps.verifyWithRetry(candidate.directoryPath, selectedPort, { run: deps.runInjector });
+      mark("验证皮肤");
       await deps.writeRuntimeState(stateForTheme(candidate, {
         port: selectedPort,
         injectorPid: watchPid,
@@ -327,6 +355,7 @@ export function createCli(overrides = {}) {
       }));
       deps.log(`换肤已启动：${candidate.theme.name}，CDP ${selectedPort}，watch PID ${watchPid}`);
       await saveSelection(name);
+      mark("提交状态与偏好");
       return 0;
     } catch (error) {
       if (watchPid) await deps.stopWatchProcess({ state: { injectorPid: watchPid } }).catch(() => {});
@@ -380,6 +409,7 @@ export function createCli(overrides = {}) {
         case "status": return status();
         case "start": return start(parsed.skinName, { ...parsed, port: parsed.port ?? DEFAULT_PORT });
         case "stop": return stop(parsed);
+        case "disable": return stop(parsed);
         case "switch": return switchTheme(parsed.skinName);
         case "verify": return verify(parsed.skinName, parsed.port);
         case "restore": return restore();

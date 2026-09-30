@@ -11,6 +11,16 @@ node_modules/
 # Editor / OS noise
 .vscode/
 .idea/
+.DS_Store
+Thumbs.db
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+
+# Local delivery archives
+/*.zip
+/*.tar.gz
+/*.7z
 
 # Local credentials and diagnostic output
 .env

@@ -1,10 +1,12 @@
 # Doubao Work Skin
 
-为 macOS「豆包工作」桌面端提供 13 套皮肤，支持通过 Agent 切换和定制。输入框发送按钮等控件自动适配各主题强调色。主题以临时样式注入，不修改应用安装包，可恢复官方外观。
+为「豆包工作」桌面端提供 13 套皮肤，支持 macOS 与 Windows，可通过 Agent 切换和定制。输入框发送按钮等控件自动适配各主题强调色。主题以临时样式注入，不修改应用安装包，可恢复官方外观。
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
 ## 快速开始
+
+> **Windows**：需要 Windows 10 1809+（x64）。**已实测**：官网桌面 EXE 版（%LOCALAPPDATA%\\DoubaoWork\\Application\\app\\DoubaoWork.exe）。**未实测**：Microsoft Store 版 / ARM64 / 其他发行版——代码含 Store 激活分支但无真机验收，勿视为已支持。
 
 需要 **macOS 13.5 或更新版本**（Apple 芯片或 Intel），豆包工作安装在 `/Applications/DoubaoWork.app`。安装器会自动准备专用运行环境，无需预先安装 Node.js、Git 或 Homebrew。
 
@@ -12,7 +14,7 @@
 
 > 请根据 https://github.com/superShen0916/doubao-work-skin 的 README 和 AGENTS.md，帮我安装并启用豆包换肤，换成「晴窗猫咪」。已经安装就直接复用；如果需要重启，请告诉我操作步骤，应用后验证是否生效。
 
-项目提供 [Agent 操作指南](./AGENTS.md)，涵盖下载、安装、切换和验证。Agent 需要能够访问仓库并在你的 Mac 上执行命令；对话安装目前处于实验阶段，仍需在豆包工作中验证完整流程。首次启用可能需要按提示手动重启应用。
+项目提供 [Agent 操作指南](./AGENTS.md)，涵盖 macOS 与 Windows 的下载、安装、切换和验证。Agent 需要能够访问仓库并在你的电脑上执行命令；对话安装目前处于实验阶段，仍需在豆包工作中验证完整流程。首次启用可能需要按提示手动重启应用。
 
 ## 效果预览
 
@@ -24,9 +26,11 @@
 
 ## 安装与日常使用
 
-首次启用可能需要重启豆包工作。安装完成后，按提示保存工作，等待当前任务结束，再从 **启动台** 或 **应用程序** 文件夹打开「豆包换肤」App（安装时自动创建到 `~/Applications/豆包换肤.app`，可拖到 Dock）。App 会智能判断：应用未运行时直接启动带皮肤；启动成功后激活窗口；已运行但启动失败时自动重试一次，并在需要时直接重启，无需确认。重新打开后回到原对话继续换肤。
+> 以下安装与启动流程主要面向 **macOS**（`.command` / `豆包换肤.app` / Dock / 启动台）。Windows 用户直接跳到下方 [Windows 安装与使用](#windows-安装与使用)。
 
-也可以双击桌面“豆包换肤”文件夹中的 **`启动豆包工作.command`**（需要重启时会询问确认）。以后通过 App 或桌面入口启动应用，都会使用上次成功应用的皮肤。在已建立上下文的对话中，可以直接说：
+首次启用可能需要重启豆包工作。安装完成后，按提示保存工作，等待当前任务结束，再从 **启动台** 或 **应用程序** 文件夹打开「豆包换肤」App（macOS 安装时自动创建到 `~/Applications/豆包换肤.app`，可拖到 Dock）。App 会智能判断：应用未运行时直接启动带皮肤；启动成功后激活窗口；已运行但启动失败时自动重试一次，并在需要时直接重启，无需确认。重新打开后回到原对话继续换肤。
+
+也可以双击桌面"豆包换肤"文件夹中的 **`启动豆包工作.command`**（macOS；需要重启时会询问确认）。以后通过 App 或桌面入口启动应用，都会使用上次成功应用的皮肤。在已建立上下文的对话中，可以直接说：
 
 - “换成海风微语。”
 - “有哪些皮肤？”
@@ -35,15 +39,30 @@
 
 新对话需要提供工具位置时，双击桌面文件夹中的 **`复制换肤提示词.command`**，将复制的内容粘贴到对话中即可。
 
-### 手动安装
+### 手动安装（macOS）
 
 1. 从 [GitHub Releases](https://github.com/superShen0916/doubao-work-skin/releases) 下载 `DoubaoWorkSkin-<版本>-macos-scripts.zip`，或下载本仓库源码 ZIP，完整解压。
 2. 双击 **`安装皮肤.command`**，等待安装完成。首次安装需要联网，安装过程不会退出豆包工作。
-3. 从启动台打开「豆包换肤」App，或双击桌面“豆包换肤”文件夹中的 **`启动豆包工作.command`**。App 无需确认，会自动处理重启；`.command` 方式需要重启时会询问确认。
+3. 从启动台打开「豆包换肤」App，或双击桌面”豆包换肤”文件夹中的 **`启动豆包工作.command`**。App 无需确认，会自动处理重启；`.command` 方式需要重启时会询问确认。
 
 首次启动默认使用「海风微语」。安装完成后，原始下载目录可以移动或删除。macOS 或公司设备策略可能要求额外确认或限制脚本运行。
 
-若桌面入口未创建成功，可在 Finder 中选择“前往 → 前往文件夹”，打开 `~/Library/Application Support/DoubaoWorkSkin/启动入口/`。这里有相同的启动、恢复和复制提示词文件。启动 App 位于 `~/Applications/豆包换肤.app`。
+若桌面入口未创建成功，可在 Finder 中选择”前往 → 前往文件夹”，打开 `~/Library/Application Support/DoubaoWorkSkin/启动入口/`。这里有相同的启动、恢复和复制提示词文件。启动 App 位于 `~/Applications/豆包换肤.app`。
+
+### Windows 安装与使用
+
+要求 **Windows 10 1809 或更新（x64）**，豆包工作为官网桌面 EXE 版。Microsoft Store 版与 ARM64 未真机验收。
+
+1. 从 [GitHub Releases](https://github.com/superShen0916/doubao-work-skin/releases) 下载 `DoubaoWorkSkin-<版本>-windows-scripts.zip`，或下载本仓库源码 ZIP，完整解压。
+2. 双击 **`安装皮肤.cmd`**（会调用同目录 `安装皮肤.ps1`），按提示操作；首次安装联网下载专用运行时，不需要预先安装 Node.js 或 Git。
+3. 安装完成后，按提示保存工作、等待当前任务结束，再双击桌面新建的 **「豆包工作皮肤」快捷方式（`.lnk`）** 启动。双击即表示允许本次换肤重启；入口会静默执行一次、应用上次选择的皮肤，并在成功后尝试把豆包工作窗口切到前台，无需黑框或 `y` 确认。
+
+日常使用：
+
+- 换肤/切换/验证仍可在对话中用自然语言完成（”换成海风微语”、”恢复官方外观”）。
+- **恢复官方外观**：双击 `%LOCALAPPDATA%\DoubaoWorkSkin\启动入口\恢复官方外观.cmd`，或运行固定入口的 `skin.cmd disable`。
+- 个人皮肤与程序数据位于 `%LOCALAPPDATA%\DoubaoWorkSkin\`（日志在其下 `launcher.log`），升级时保留，不会被覆盖。
+- 桌面 `.lnk` 由系统 `wscript.exe` 无窗口托管，再调用 PowerShell 与内置 Node CLI；直接进入已授权的换肤重启流程，成功后按 PID 恢复隐藏或最小化的主窗口，并验证是否置前。无需输入 `y`，也不会显示终端窗口。Windows 可能拒绝前台焦点请求，此时记录“窗口置前未确认”，皮肤成功状态不受影响；可点击任务栏打开。仅在控制台排查时运行 `启动豆包工作.cmd`。
 
 ### 可选：Skill
 
@@ -182,7 +201,7 @@ node skin.mjs restore           # 停止守护、恢复外观并清除状态
 
 **支持 Windows 或 Linux 吗？**
 
-暂不支持，目前仅适配 macOS 桌面端。
+支持 **macOS** 与 **Windows**（Windows 安装见上文 [Windows 安装与使用](#windows-安装与使用)）。Windows 已实测官网桌面 EXE 版；Microsoft Store 版与 ARM64 未真机验收。Linux 暂不支持。
 
 ## 开发与贡献
 
@@ -191,7 +210,7 @@ npm run check   # 语法、JSON、主题配置与资源检查
 npm test        # 行为与失败路径回归测试
 ```
 
-CI 使用 macOS + Node.js 22 / 24，测试不连接真实应用。
+CI 使用 macOS 与 Windows + Node.js 22 / 24，测试不连接真实应用。
 
 | 文档 | 用途 |
 | --- | --- |

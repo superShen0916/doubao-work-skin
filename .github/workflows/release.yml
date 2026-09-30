@@ -14,18 +14,22 @@ concurrency:
 
 jobs:
   check:
-    runs-on: macos-latest
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
+        os: [macos-latest, windows-latest]
         node: [22, 24]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.0.0
         with:
+          package-manager-cache: false
           node-version: ${{ matrix.node }}
-      - run: node scripts/verify-release.mjs --tag-only "$GITHUB_REF_NAME"
+      - name: Validate release tag
+        shell: bash
+        run: node scripts/verify-release.mjs --tag-only "$GITHUB_REF_NAME"
       - run: npm run check
       - run: npm test
       - run: git diff --exit-code
@@ -37,12 +41,15 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.0.0
         with:
+          package-manager-cache: false
           node-version: 24
       - run: npm run build:release
-      - run: node scripts/verify-release.mjs --tag "$GITHUB_REF_NAME"
+      - name: Verify release packages
+        shell: bash
+        run: node scripts/verify-release.mjs --tag "$GITHUB_REF_NAME"
       - name: Upload and verify draft, then publish
         env:
           GH_TOKEN: ${{ github.token }}
@@ -59,6 +66,8 @@ jobs:
           gh release upload "$tag" \
             "dist/DoubaoWorkSkin-$version-macos-scripts.zip" \
             "dist/DoubaoWorkSkin-$version-macos-scripts.zip.sha256" \
+            "dist/DoubaoWorkSkin-$version-windows-scripts.zip" \
+            "dist/DoubaoWorkSkin-$version-windows-scripts.zip.sha256" \
             "dist/doubao-work-skin-$version-skill.zip" \
             "dist/doubao-work-skin-$version-skill.zip.sha256" --clobber
           download_dir="$RUNNER_TEMP/release-$GITHUB_RUN_ID"
@@ -68,7 +77,7 @@ jobs:
             cd "$download_dir"
             shasum -a 256 -c ./*.zip.sha256
           )
-          for file in "DoubaoWorkSkin-$version-macos-scripts.zip" "doubao-work-skin-$version-skill.zip"; do
+          for file in "DoubaoWorkSkin-$version-macos-scripts.zip" "DoubaoWorkSkin-$version-windows-scripts.zip" "doubao-work-skin-$version-skill.zip"; do
             cmp "dist/$file.sha256" "$download_dir/$file.sha256"
           done
           gh release edit "$tag" --draft=false --latest --notes-file "docs/releases/$tag.md"

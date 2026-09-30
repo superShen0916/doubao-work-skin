@@ -1,24 +1,32 @@
 import fs from "node:fs/promises";
 import fsSync from "node:fs";
 import path from "node:path";
-import { execFile, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 import { createConnection } from "node:net";
 import { fileURLToPath } from "node:url";
-import { promisify } from "node:util";
 import { fetchCdpJson } from "./cdp.mjs";
-import { assertDoubaoWorkPort, DOUBAOWORK_BINARY, DOUBAOWORK_BROWSER_BINARY, DOUBAOWORK_PGREP_PATTERN } from "./app-identity.mjs";
+import { assertDoubaoWorkPort, DOUBAOWORK_BINARY, DOUBAOWORK_BROWSER_BINARY } from "./app-identity.mjs";
+import {
+  paths as platformPaths,
+  inspectProcess as platformInspectProcess,
+  listProcessesByName,
+  isProcessAlive as platformIsProcessAlive,
+  terminateProcess,
+  killProcessTree,
+  launchApp,
+  discoverAppInstall,
+  ensurePrivateDir,
+  ensurePrivateFile,
+} from "./platform/index.mjs";
+
 export { DOUBAOWORK_BINARY, DOUBAOWORK_BROWSER_BINARY } from "./app-identity.mjs";
 
-const execFileAsync = promisify(execFile);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const PROJECT_ROOT = path.resolve(HERE, "..");
 export const INJECTOR_PATH = path.join(HERE, "injector.mjs");
 export const STATE_SCHEMA_VERSION = 1;
 
-export function createRuntimePaths(stateRoot = process.env.DWS_STATE_ROOT || path.join(
-  process.env.HOME || "",
-  "Library/Application Support/DoubaoWorkSkin",
-)) {
+export function createRuntimePaths(stateRoot = process.env.DWS_STATE_ROOT || platformPaths().dataRoot) {
   const root = path.resolve(stateRoot);
   return Object.freeze({
     root,
@@ -66,8 +74,8 @@ export function normalizeRuntimeState(raw, { projectRoot = PROJECT_ROOT } = {}) 
 }
 
 export async function ensureRuntimeRoot(paths = runtimePaths) {
-  await fs.mkdir(paths.root, { recursive: true, mode: 0o700 });
-  await fs.chmod(paths.root, 0o700);
+  await fs.mkdir(paths.root, { recursive: true });
+  await ensurePrivateDir(paths.root).catch(() => {});
 }
 
 export async function readRuntimeState({ paths = runtimePaths, allowMissing = true } = {}) {
@@ -92,7 +100,7 @@ export async function writeRuntimeState(nextState, { paths = runtimePaths } = {}
   const content = `${JSON.stringify(normalized, null, 2)}\n`;
   try {
     await fs.writeFile(temporary, content, { mode: 0o600, flag: "wx" });
-    await fs.chmod(temporary, 0o600);
+    await ensurePrivateFile(temporary).catch(() => {});
     await fs.rename(temporary, paths.state);
   } catch (error) {
     await fs.rm(temporary, { force: true }).catch(() => {});
@@ -134,53 +142,75 @@ export async function rememberTheme(name, { paths = runtimePaths } = {}) {
   }
 }
 
-export function isProcessAlive(pid, { killImpl = process.kill } = {}) {
-  try {
-    killImpl(positiveInteger(pid, "PID"), 0);
-    return true;
-  } catch (error) {
-    if (error?.code === "EPERM") return true;
-    return false;
+export function isProcessAlive(pid, { killImpl = null } = {}) {
+  if (killImpl) {
+    try {
+      killImpl(positiveInteger(pid, "PID"), 0);
+      return true;
+    } catch (error) {
+      if (error?.code === "EPERM") return true;
+      return false;
+    }
   }
+  // 异步版本通过 platform 层
+  return platformIsProcessAlive(pid);
 }
 
 async function defaultInspectProcess(pid) {
-  const [{ stdout: command }, cwdResult] = await Promise.all([
-    execFileAsync("ps", ["-p", String(pid), "-o", "command="], { encoding: "utf8" }),
-    execFileAsync("lsof", ["-a", "-p", String(pid), "-d", "cwd", "-Fn"], { encoding: "utf8" }).catch(() => ({ stdout: "" })),
-  ]);
-  const cwdLine = String(cwdResult.stdout || "").split("\n").find((line) => line.startsWith("n"));
-  return { command: command.trim(), cwd: cwdLine ? cwdLine.slice(1) : null };
+  return platformInspectProcess(pid);
 }
 
 function parseWatchCommand(command, { injectorPath, cwd }) {
   const source = String(command || "").trim();
-  const absoluteInjector = path.resolve(injectorPath);
-  const candidates = [absoluteInjector];
-  if (cwd) candidates.push(path.relative(cwd, absoluteInjector));
-  let injectorToken = null;
+  if (!source) return null;
+  const pathMod = pathFor(injectorPath);
+  const absoluteInjector = pathMod.resolve(injectorPath);
+  const candidates = [absoluteInjector, injectorPath];
+  if (cwd) {
+    candidates.push(pathMod.relative(cwd, absoluteInjector));
+    candidates.push(pathMod.relative(cwd, injectorPath));
+  }
   let injectorIndex = -1;
+  let injectorToken = null;
   for (const candidate of candidates) {
+    if (!candidate) continue;
     const index = source.indexOf(candidate);
     if (index >= 0 && (injectorIndex < 0 || index < injectorIndex)) {
-      injectorToken = candidate;
       injectorIndex = index;
+      injectorToken = candidate;
     }
   }
   if (injectorIndex < 0) return null;
-  const executable = source.slice(0, injectorIndex).trim();
-  if (!(executable === "node" || executable.endsWith("/node"))) return null;
-  const tokens = source.slice(injectorIndex + injectorToken.length).trim().split(/\s+/);
-  const watchIndex = tokens.indexOf("--watch");
-  const portIndex = tokens.indexOf("--port");
-  const skinIndex = tokens.indexOf("--skin");
-  if (watchIndex < 0 || portIndex < 0 || skinIndex < 0) return null;
+  // 截取可执行文件路径：处理 injector 前面的引号（Windows 风格）
+  // macOS ps 输出不含引号但路径可能含空格；Windows 命令行含空格路径会被引号包裹
+  let beforeInjector = source.slice(0, injectorIndex).trimEnd();
+  // 如果 injector 前面是引号（Windows 风格中 injector 的开引号），去掉它
+  if (beforeInjector.endsWith('"') || beforeInjector.endsWith("'")) {
+    beforeInjector = beforeInjector.slice(0, -1).trimEnd();
+  }
+  // 去除可执行文件路径自身的首尾引号
+  const executable = beforeInjector.trim().replace(/^["']|["']$/g, "");
+  // 既支持 PATH 解析得到的裸 node/node.exe，也支持带目录的绝对路径。
+  if (!/(?:^|[\\/])node(?:\.exe)?$/i.test(executable)) return null;
+  // 从原始字符串中提取参数值（能处理含空格的路径，macOS ps 输出不含引号）
+  const rest = source.slice(injectorIndex + injectorToken.length);
+  // A substring is not an entrypoint: injector.mjs.bak/evil must never be killed.
+  if (!/^(?:["']?\s|$)/.test(rest)) return null;
+  const portMatch = rest.match(/(?:^|\s)--port\s+(\d+)(?=\s|$)/);
+  const skinMatch = rest.match(/--skin\s+(.+?)(?=\s+--(?:port|watch|timeout-ms)\b|$)/);
+  if (!/(?:^|\s)--watch(?=\s|$)/.test(rest) || !portMatch || !skinMatch) return null;
+  // 去除 skinDir 的首尾引号（Windows 风格）
+  const skinDir = skinMatch[1].trim().replace(/^["']|["']$/g, "");
   return {
     injectorToken,
-    port: Number(tokens[portIndex + 1]),
-    skinDir: source.slice(injectorIndex + injectorToken.length).trim()
-      .match(/(?:^|\s)--skin\s+(.+?)(?=\s+--(?:port|watch|timeout-ms)\b|$)/)?.[1] || null,
+    port: Number(portMatch[1]),
+    skinDir,
   };
+}
+
+// 根据路径格式选择 posix 或 win32 的 path 实现（跨平台测试时需要）
+function pathFor(p) {
+  return (/^[A-Z]:[\\/]/i.test(p) || p.includes("\\")) ? path.win32 : path;
 }
 
 export async function inspectWatchProcess(pid, {
@@ -195,16 +225,17 @@ export async function inspectWatchProcess(pid, {
   } catch {
     return null;
   }
-  const cwd = info.cwd ? path.resolve(info.cwd) : null;
+  const pathMod = pathFor(injectorPath);
+  const cwd = info.cwd ? pathMod.resolve(info.cwd) : null;
   const parsed = parseWatchCommand(info.command, { injectorPath, cwd });
   if (!parsed) return null;
-  const resolvedInjector = path.isAbsolute(parsed.injectorToken)
-    ? path.resolve(parsed.injectorToken)
+  const resolvedInjector = pathMod.isAbsolute(parsed.injectorToken)
+    ? pathMod.resolve(parsed.injectorToken)
     : cwd
-      ? path.resolve(cwd, parsed.injectorToken)
+      ? pathMod.resolve(cwd, parsed.injectorToken)
       : null;
-  if (resolvedInjector !== path.resolve(injectorPath)) return null;
-  if (cwd && cwd !== path.resolve(projectRoot)) return null;
+  if (resolvedInjector !== pathMod.resolve(injectorPath)) return null;
+  if (cwd && cwd !== pathMod.resolve(projectRoot)) return null;
   return { pid: numericPid, command: info.command, cwd, port: parsed.port, skinDir: parsed.skinDir };
 }
 
@@ -217,11 +248,7 @@ export async function findOwnedWatchProcesses({
   let rows;
   if (listProcesses) rows = await listProcesses();
   else {
-    const { stdout } = await execFileAsync("ps", ["-axo", "pid=,command="], { encoding: "utf8", maxBuffer: 4 * 1024 * 1024 });
-    rows = stdout.split("\n").map((line) => {
-      const match = line.match(/^\s*(\d+)\s+(.*)$/);
-      return match ? { pid: Number(match[1]), command: match[2] } : null;
-    }).filter(Boolean);
+    rows = await listProcessesByName(["node", "node.exe"]);
   }
   const likely = rows.filter((row) => String(row.command || "").includes("injector.mjs") && String(row.command || "").includes("--watch"));
   const owned = [];
@@ -244,19 +271,20 @@ export async function readWatchProcess({ state = null, ...options } = {}) {
 export async function waitForProcessExit(pid, {
   timeoutMs = 5_000,
   intervalMs = 100,
-  alive = isProcessAlive,
+  alive = null,
 } = {}) {
+  const checkAlive = alive || ((p) => platformIsProcessAlive(p));
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (!alive(pid)) return true;
+    if (!await checkAlive(pid)) return true;
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
-  return !alive(pid);
+  return !await checkAlive(pid);
 }
 
 export async function stopWatchProcess({
   state = null,
-  signal = process.kill,
+  signal = null,
   findOwned = findOwnedWatchProcesses,
   waitForExit = waitForProcessExit,
 } = {}) {
@@ -267,25 +295,62 @@ export async function stopWatchProcess({
     if (direct) candidates.set(direct.pid, direct);
   }
   for (const entry of candidates.values()) {
-    signal(entry.pid, "SIGTERM");
+    if (signal) signal(entry.pid, "SIGTERM");
+    else await terminateProcess(entry.pid, { force: process.platform === "win32" }).catch(() => {});
   }
   for (const entry of candidates.values()) {
     if (!await waitForExit(entry.pid)) {
-      signal(entry.pid, "SIGKILL");
+      if (signal) signal(entry.pid, "SIGKILL");
+      else await killProcessTree(entry.pid).catch(() => {});
       if (!await waitForExit(entry.pid, { timeoutMs: 2_000 })) throw new Error(`无法停止 watch 进程 ${entry.pid}`);
     }
   }
   return [...candidates.values()];
 }
 
-export async function findDoubaoWorkPid({ execFileImpl = execFileAsync } = {}) {
-  try {
-    const { stdout } = await execFileImpl("pgrep", ["-f", DOUBAOWORK_PGREP_PATTERN], { encoding: "utf8" });
-    const pid = String(stdout).split("\n").map(Number).find((value) => Number.isInteger(value) && value > 0);
-    return pid || null;
-  } catch {
-    return null;
+function rowPathMatchesMain(row, normalizedMain) {
+  if (row.executablePath && path.resolve(row.executablePath).toLowerCase() === normalizedMain) return true;
+  // 提取命令行中第一个可执行文件路径（去除引号包裹），兼容 Windows "C:\...\exe" --args 格式
+  const cmd = String(row.command || "");
+  const firstToken = cmd.startsWith('"')
+    ? cmd.slice(1, cmd.indexOf('"', 1))
+    : cmd.split(/\s+/)[0];
+  if (!firstToken) return false;
+  return path.resolve(firstToken).toLowerCase() === normalizedMain;
+}
+
+/**
+ * 从进程行中选出主进程 PID。
+ * 真实安装下 renderer/gpu/utility 子进程与主进程共用同一 exe 路径，
+ * 光按路径匹配会随机选到子进程。主进程必须同时满足：
+ *   1) 命令行非空（空命令行可能是权限不足/信息缺失，不能冒充主进程）；
+ *   2) 命令行不含 `--type=`。
+ * 只有子进程或命令行不明时返回 null，绝不把 renderer 当主进程（避免误杀）。
+ */
+export function pickMainDoubaoWorkPid(rows, normalizedMain) {
+  for (const row of (Array.isArray(rows) ? rows : [])) {
+    if (!rowPathMatchesMain(row, normalizedMain)) continue;
+    const command = String(row.command || "");
+    if (!command) continue;
+    if (/--type=/.test(command)) continue;
+    return row.pid;
   }
+  return null;
+}
+
+export async function findDoubaoWorkPid({ execFileImpl = null } = {}) {
+  if (execFileImpl) {
+    // 测试注入：原有 pgrep 逻辑
+    const { stdout } = await execFileImpl("pgrep", ["-f", DOUBAOWORK_BINARY], { encoding: "utf8" });
+    const pids = stdout.trim().split(/\s+/).filter(Boolean).map(Number);
+    return pids.length ? pids[0] : null;
+  }
+  // 正常路径：通过 platform 层获取实际应用路径，按进程名查找
+  const install = await discoverAppInstall().catch(() => null);
+  const mainBinary = install?.mainBinary || DOUBAOWORK_BINARY;
+  const mainName = path.basename(mainBinary).replace(/\.exe$/i, "");
+  const rows = await listProcessesByName([mainName, `${mainName}.exe`]).catch(() => []);
+  return pickMainDoubaoWorkPid(rows, path.resolve(mainBinary).toLowerCase());
 }
 
 export async function selectAvailablePort(preferred, {
@@ -315,60 +380,96 @@ export async function selectAvailablePort(preferred, {
 export async function launchDoubaoWork({
   port,
   paths = runtimePaths,
-  spawnImpl = spawn,
+  spawnImpl = null,
   binary = DOUBAOWORK_BINARY,
+  install = null,
 } = {}) {
   positiveInteger(port, "port");
   await ensureRuntimeRoot(paths);
   const stdoutFd = fsSync.openSync(paths.appLog, "a", 0o600);
   const stderrFd = fsSync.openSync(paths.appErrorLog, "a", 0o600);
   try {
-    const child = spawnImpl(binary, [
-      "--remote-debugging-address=127.0.0.1",
-      `--remote-debugging-port=${port}`,
-    ], {
-      detached: true,
-      stdio: ["ignore", stdoutFd, stderrFd],
-      env: process.env,
-    });
-    if (!child?.pid) throw new Error("豆包工作进程未返回 PID");
-    child.unref?.();
-    return child.pid;
+    if (spawnImpl) {
+      // 测试注入：保持原有 spawn 接口；若调用方携带 install，用其 mainBinary
+      const targetBinary = install?.mainBinary || binary;
+      const child = spawnImpl(targetBinary, [
+        "--remote-debugging-address=127.0.0.1",
+        `--remote-debugging-port=${port}`,
+      ], {
+        detached: true,
+        stdio: ["ignore", stdoutFd, stderrFd],
+        env: process.env,
+      });
+      if (!child?.pid) throw new Error("豆包工作进程未返回 PID");
+      child.unref?.();
+      return child.pid;
+    }
+    // 正常路径：调用方应在停止应用之前先 discoverAppInstall 并把 install 传进来
+    // （应用停止后进程反查为空，自定义路径也枚举不到）。未传则现场再发现一次。
+    if (!install?.mainBinary) install = await discoverAppInstall().catch(() => null);
+    if (!install) throw new Error("未找到豆包工作安装；可先正常打开一次应用让其记录位置");
+    return await launchApp(install, port, { logFd: stdoutFd, errorFd: stderrFd });
   } finally {
     fsSync.closeSync(stdoutFd);
     fsSync.closeSync(stderrFd);
   }
 }
 
-export async function findDoubaoWorkBrowserPids({ execFileImpl = execFileAsync } = {}) {
-  const { stdout } = await execFileImpl("ps", ["-axo", "pid=,command="], { encoding: "utf8" });
-  return stdout.split("\n").flatMap((line) => {
-    const match = line.match(/^\s*(\d+)\s+(.*)$/);
-    if (!match) return [];
-    const command = match[2];
-    return command === DOUBAOWORK_BROWSER_BINARY || command.startsWith(`${DOUBAOWORK_BROWSER_BINARY} --`)
-      ? [Number(match[1])] : [];
-  });
+export async function findDoubaoWorkBrowserPids({ execFileImpl = null } = {}) {
+  if (execFileImpl) {
+    // 测试注入：原有 ps 逻辑
+    const { stdout } = await execFileImpl("ps", ["-axo", "pid=,command="], { encoding: "utf8", maxBuffer: 4 * 1024 * 1024 });
+    return stdout.split("\n").map((line) => {
+      const match = line.match(/^\s*(\d+)\s+(.*)$/);
+      return match ? { pid: Number(match[1]), command: match[2] } : null;
+    }).filter((row) => {
+      if (!row) return false;
+      return row.command === DOUBAOWORK_BROWSER_BINARY || row.command.startsWith(`${DOUBAOWORK_BROWSER_BINARY} --`);
+    }).map((row) => row.pid);
+  }
+  // 正常路径：通过 platform 层获取实际应用路径
+  const install = await discoverAppInstall().catch(() => null);
+  const helperBinary = install?.helperBinary || DOUBAOWORK_BROWSER_BINARY;
+  const helperName = path.basename(helperBinary).replace(/\.exe$/i, "");
+  const rows = await listProcessesByName([helperName, `${helperName}.exe`]).catch(() => []);
+  const normalizedHelper = path.resolve(helperBinary).toLowerCase();
+  return rows
+    .filter((row) => {
+      if (row.executablePath && path.resolve(row.executablePath).toLowerCase() === normalizedHelper) return true;
+      const command = String(row.command || "");
+      const firstToken = command.startsWith('"')
+        ? command.slice(1, command.indexOf('"', 1))
+        : command.split(/\s+/)[0];
+      if (!firstToken) return false;
+      return path.resolve(firstToken).toLowerCase() === normalizedHelper;
+    })
+    .map((row) => row.pid);
 }
 
 export async function stopDoubaoWork({
   pid,
-  signal = process.kill,
+  signal = null,
   waitForExit = waitForProcessExit,
   findBrowserPids = findDoubaoWorkBrowserPids,
 } = {}) {
   const numericPid = positiveInteger(pid, "豆包工作 PID");
   const browserPids = await findBrowserPids();
-  signal(numericPid, "SIGTERM");
+  if (signal) signal(numericPid, "SIGTERM");
+  else await terminateProcess(numericPid).catch(() => {});
   if (!await waitForExit(numericPid, { timeoutMs: 10_000 })) {
-    signal(numericPid, "SIGKILL");
+    if (signal) signal(numericPid, "SIGKILL");
+    else await killProcessTree(numericPid).catch(() => {});
     if (!await waitForExit(numericPid, { timeoutMs: 2_000 })) throw new Error(`无法停止豆包工作进程 ${numericPid}`);
   }
   // 主应用是 shim；它退出不代表持有 profile 单例锁的浏览器已经退出。
-  for (const browserPid of browserPids) {
-    if (!await waitForExit(browserPid, { timeoutMs: 10_000 })) {
-      throw new Error(`豆包工作浏览器 PID ${browserPid} 尚未退出；请完全退出应用后重试，避免新启动的 CDP 参数被旧实例忽略`);
-    }
+  // 多个浏览器进程彼此独立，并行等待，避免按 PID 串行累计超时。
+  const browserResults = await Promise.all(browserPids.map(async (browserPid) => ({
+    browserPid,
+    exited: await waitForExit(browserPid, { timeoutMs: 10_000 }),
+  })));
+  const pending = browserResults.find(({ exited }) => !exited);
+  if (pending) {
+    throw new Error(`豆包工作浏览器 PID ${pending.browserPid} 尚未退出；请完全退出应用后重试，避免新启动的 CDP 参数被旧实例忽略`);
   }
 }
 
@@ -392,6 +493,7 @@ export async function spawnWatchProcess({
       detached: true,
       stdio: ["ignore", stdoutFd, stderrFd],
       env: process.env,
+      windowsHide: true,
     });
     if (!child?.pid) throw new Error("watch 进程未返回 PID");
     child.unref?.();
